@@ -120,9 +120,10 @@
   value: true
   mirror: always
 
+# Plain-text mail in the system font (Superhuman look; stock default: true).
 - name: mail.fixed_width_messages
   type: bool
-  value: true
+  value: false
   mirror: always
 
 - name: mail.force_user_charset

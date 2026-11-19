@@ -2795,6 +2795,10 @@ const gHeaderCustomize = {
       "messageHeaderCustomizationPanel"
     );
 
+    // Superhuman look: sender shown by name only, unless the user customized it.
+    if (Services.prefs.getBoolPref("mail.superhuman.enabled", false)) {
+      this.customizeData.showFullAddress = false;
+    }
     if (Services.xulStore.hasValue(this.docURL, "messageHeader", "layout")) {
       this.customizeData = JSON.parse(
         Services.xulStore.getValue(this.docURL, "messageHeader", "layout")

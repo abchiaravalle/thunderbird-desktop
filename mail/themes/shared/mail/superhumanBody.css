@@ -1,0 +1,39 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+/* ===== superhumanBody.css =============================================
+   Loaded into displayed messages (see messageBody.css @import) when
+   mail.superhuman.enabled is true: SF type and a centred reading column
+   for plain-text mail. HTML mail keeps its own layout and only gets the
+   centred column.
+   ====================================================================== */
+
+/* stylelint-disable-next-line media-query-no-invalid */
+@media -moz-pref("mail.superhuman.enabled") {
+  :root {
+    --sh-col: 760px;
+  }
+
+  body {
+    box-sizing: border-box;
+    max-inline-size: calc(var(--sh-col) + 64px);
+    margin-inline: auto !important;
+    padding: 6px 32px 48px !important;
+  }
+
+  .moz-text-plain,
+  .moz-text-flowed,
+  .moz-text-plain pre,
+  .moz-text-flowed pre {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif !important;
+    font-size: 15px !important;
+    line-height: 1.6 !important;
+    color: light-dark(#1c1c1e, #f2f2f7);
+  }
+
+  .moz-txt-sig,
+  .moz-signature {
+    color: #8e8e93 !important;
+  }
+}

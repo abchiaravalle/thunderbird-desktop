@@ -1,0 +1,89 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+/* ===== superhumanWindow.css ===========================================
+   Window chrome for the Superhuman look: a Liquid Glass window (the native
+   -moz-sidebar material, which macOS 26+ draws as NSGlassEffectView when
+   widget.macos.sidebar-glass is on), a slim toolbar and no spaces strip.
+   Only active when mail.superhuman.enabled is true.
+   ====================================================================== */
+
+@namespace html url("http://www.w3.org/1999/xhtml");
+
+/* stylelint-disable-next-line media-query-no-invalid */
+@media -moz-pref("mail.superhuman.enabled") {
+  :root:not([lwtheme]) {
+    --sh-font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+    --sh-ink-2: light-dark(#6e6e73, #a1a1a6);
+    --sh-hair: light-dark(rgba(0, 0, 0, 0.06), rgba(255, 255, 255, 0.08));
+    --sh-glass: light-dark(rgba(255, 255, 255, 0.55), rgba(44, 44, 46, 0.5));
+    --sh-glass-edge: light-dark(rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0.14));
+    font-family: var(--sh-font);
+  }
+
+  /* The whole window body sits on glass; content panes paint their own
+   * calm surfaces on top (Apple's rule: glass for the floating layer). */
+  :root:not([lwtheme]) #messengerBody {
+    position: relative;
+    background: transparent;
+
+    &::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      z-index: -1;
+      appearance: auto;
+      -moz-default-appearance: -moz-sidebar;
+    }
+  }
+
+  :root:not([lwtheme]) :is(#tabmail-container, #tabmail, #tabmail-tabbox, #tabpanelcontainer) {
+    background: transparent;
+  }
+
+  /* Superhuman has no app-switcher rail. */
+  #spacesToolbar,
+  #spacesToolbarReveal {
+    display: none !important;
+  }
+
+  #spacesToolbar ~ #messengerBody,
+  :root:not(.customizingUnifiedToolbar) #spacesToolbar ~ #navigation-toolbox #titlebar {
+    margin-inline-start: 0 !important;
+  }
+
+  :root:not(.customizingUnifiedToolbar) #spacesToolbar ~ #navigation-toolbox #unifiedToolbarContainer {
+    inline-size: 100vw !important;
+  }
+
+  /* Slim, quiet toolbar on glass. */
+  :root:not([lwtheme]) #navigation-toolbox {
+    box-shadow: none;
+    border-block-end: 1px solid var(--sh-hair);
+  }
+
+  unified-toolbar {
+    --unified-toolbar-button-background: transparent;
+  }
+
+  #unifiedToolbarContent .unified-toolbar-button {
+    border-radius: 999px;
+  }
+
+  #unifiedToolbarContent global-search-bar {
+    --search-bar-border-color: transparent;
+    --search-bar-background: var(--sh-glass);
+    --search-field-border-radius: 999px;
+  }
+
+  /* Status bar off; Superhuman shows a toast instead. */
+  #status-bar {
+    display: none !important;
+  }
+
+  /* Tabs only when there is more than one (mail.tabs.autoHide). */
+  #tabs-toolbar .tabmail-tab {
+    border-radius: 10px;
+  }
+}

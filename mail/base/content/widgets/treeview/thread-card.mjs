@@ -6,6 +6,10 @@ import { TreeViewTableRow } from "chrome://messenger/content/tree-view.mjs";
 // eslint-disable-next-line import-x/no-unassigned-import
 import "chrome://messenger/content/thread-card-tags.mjs";
 
+const { MailServices } = ChromeUtils.importESModule(
+  "resource:///modules/MailServices.sys.mjs"
+);
+
 /**
  * The tr element row of the TreeView table for the cards view layout.
  * NOTE: The main child is a clone of the `#threadPaneCardTemplate` template.
@@ -41,6 +45,62 @@ class ThreadCard extends TreeViewTableRow {
     this.twistyButton = this.querySelector("button.twisty");
     this.sortHeaderDetails = this.querySelector(".sort-header-details");
     this.statusIndicator = this.querySelector(".read-status");
+    this.chips = this.querySelector(".superhuman-chips");
+    this.previewLine = this.querySelector(".superhuman-preview");
+  }
+
+  /**
+   * Superhuman layout: fill the label chips and the grey preview text that
+   * follows the subject. No-op unless mail.superhuman.enabled is set.
+   *
+   * @param {string} tagKeys - Space separated tag keys of the message.
+   * @param {boolean} isDummy - Whether this is a group header row.
+   */
+  #fillSuperhuman(tagKeys, isDummy) {
+    if (!this.chips || !window.superhuman?.enabled) {
+      return;
+    }
+    this.chips.replaceChildren();
+    this.previewLine.textContent = "";
+    if (isDummy) {
+      return;
+    }
+    for (const key of (tagKeys || "").split(" ").filter(Boolean)) {
+      const tag = ThreadCard.#tagInfo(key);
+      if (!tag) {
+        continue;
+      }
+      const chip = document.createElement("span");
+      chip.className = "superhuman-chip";
+      chip.textContent = tag.tag.toLowerCase();
+      chip.style.setProperty("--chip", tag.color || "#8e8e93");
+      this.chips.appendChild(chip);
+    }
+    this.previewLine.textContent = window.superhuman.previewFor(this._index);
+    const date = window.superhuman.dateFor(this._index);
+    if (date) {
+      this.dateLine.textContent = date;
+    }
+    // Superhuman shows just the person's name: "Ann Lee <ann@x.com>" -> "Ann Lee".
+    const name = this.senderLine.textContent.replace(/\s*<[^>]+>\s*$/, "");
+    if (name && name != this.senderLine.textContent) {
+      this.senderLine.textContent = name;
+    }
+  }
+
+  static #tagCache = null;
+
+  static #tagInfo(key) {
+    if (!ThreadCard.#tagCache) {
+      ThreadCard.#tagCache = new Map(
+        MailServices.tags.getAllTags().map(t => [t.key, t])
+      );
+      // Rebuild if tags are edited.
+      Services.prefs.addObserver("mailnews.tags.", () => {
+        ThreadCard.#tagCache = null;
+      });
+    }
+    return ThreadCard.#tagCache.get(key);
   }
 
   fillRow() {
@@ -94,6 +154,8 @@ class ThreadCard extends TreeViewTableRow {
 
     this.subjectLine.textContent = data.subject;
     this.subjectLine.title = data.subject;
+    // Clear reused Superhuman bits; filled again below for message rows.
+    this.#fillSuperhuman("", true);
 
     // Handle a different style and data if this is a dummy row.
     if (propertiesSet.has("dummy")) {
@@ -127,6 +189,7 @@ class ThreadCard extends TreeViewTableRow {
     this.dateLine.textContent = data.date;
 
     this.threadCardTags.setAttribute("tags", data.tagKeys);
+    this.#fillSuperhuman(data.tagKeys, false);
 
     // Follow the layout order.
     ariaLabelPromises.push(data.sender);

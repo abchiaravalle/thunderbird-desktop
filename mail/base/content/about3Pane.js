@@ -219,6 +219,9 @@ window.addEventListener("DOMContentLoaded", async event => {
 
   updateZoomCommands();
 
+  superhuman.init();
+  superhuman.onFolderChanged();
+
   // Update the state of the about:3pane being fully loaded.
   hasDOMContentLoaded.resolve();
 });
@@ -4343,6 +4346,7 @@ var threadPaneHeader = {
    * synthetic view is created.
    */
   onFolderSelected() {
+    superhuman.onFolderChanged();
     // Bail out if the pane is hidden as we don't need to update anything.
     if (this.isHidden) {
       return;

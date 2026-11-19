@@ -1631,6 +1631,16 @@ pref("mail.threadpane.listview", 0);
 // Row count for the cards view, currently bound to a range between 2 and 3.
 pref("mail.threadpane.cardsview.rowcount", 3);
 
+// Superhuman-style layout, keyboard map and command palette (this fork).
+// Set to false for the stock Thunderbird interface.
+pref("mail.superhuman.enabled", true);
+// Superhuman has no folder sidebar; the menu button shows it (remembered).
+pref("mail.superhuman.folders-visible", false);
+#ifdef XP_MACOSX
+// Draw sidebar-material regions with Liquid Glass on macOS 26+.
+pref("widget.macos.sidebar-glass", true);
+#endif
+
 // Whether the OS Authentication is enabled or not.
 pref("signon.management.page.os-auth.locked.enabled", false);
 

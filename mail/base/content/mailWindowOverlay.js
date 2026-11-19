@@ -1613,6 +1613,20 @@ function SetupUndoRedoCommand(command) {
  * (with its search box focused).
  */
 function QuickSearchFocus() {
+  // Superhuman look: Cmd+K opens the command palette in the mail tab.
+  if (
+    Services.prefs.getBoolPref("mail.superhuman.enabled", false) &&
+    document.getElementById("tabmail")?.currentTabInfo?.mode.name ==
+      "mail3PaneTab"
+  ) {
+    const about3Pane = document.getElementById("tabmail").currentAbout3Pane;
+    if (about3Pane?.superhuman) {
+      about3Pane.superhuman.paletteOpen
+        ? about3Pane.superhuman.closePalette()
+        : about3Pane.superhuman.openPalette();
+      return;
+    }
+  }
   // Default to focusing the search box on the current tab
   let newTab = false;
   let searchInput;

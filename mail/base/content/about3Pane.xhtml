@@ -34,6 +34,7 @@
   <link rel="stylesheet" href="chrome://messenger/skin/shared/tree-listbox.css" />
   <link rel="stylesheet" href="chrome://messenger/skin/searchBox.css" />
   <link rel="stylesheet" href="chrome://messenger/skin/about3Pane.css" />
+  <link rel="stylesheet" href="chrome://messenger/skin/superhuman.css" />
 
   <link rel="localization" href="calendar/calendar.ftl" />
   <link rel="localization" href="messenger/about3Pane.ftl" />
@@ -61,6 +62,7 @@
   <script defer="defer" src="chrome://messenger/content/mailContext.js"></script>
   <script defer="defer" src="chrome://messenger/content/mailCommon.js"></script>
   <script defer="defer" src="chrome://messenger/content/about3Pane.js"></script>
+  <script defer="defer" src="chrome://messenger/content/superhuman.js"></script>
 </head>
 <body id="paneLayout" is="pane-layout" class="layout-classic">
   <div id="folderPane" class="collapsed-by-splitter" tabindex="-1">
@@ -331,7 +333,9 @@
                 <img src="" alt="" class="twisty-icon" />
               </button>
               <div class="thread-card-subject-container">
+                <span class="superhuman-chips"></span>
                 <span class="subject"></span>
+                <span class="superhuman-preview"></span>
               </div>
               <div class="thread-card-icon-info">
                 <img class="attachment-icon" src="" data-l10n-id="tree-list-view-row-attach" />

@@ -508,7 +508,12 @@
       }
 
       if (this.dataset.headerName == "from") {
-        if (showCondensedAddress) {
+        // Superhuman look: name on the first line, address underneath.
+        const superhuman = Services.prefs.getBoolPref(
+          "mail.superhuman.enabled",
+          false
+        );
+        if (showCondensedAddress || superhuman) {
           this.nameLine.textContent =
             displayName || this.displayName || this.fullAddress;
         } else {
