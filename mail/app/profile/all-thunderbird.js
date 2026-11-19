@@ -783,15 +783,16 @@ pref("font.name.sans-serif.x-unicode", "Lucida Grande");
 pref("font.name.monospace.x-unicode", "Menlo");
 pref("font.name-list.sans-serif.x-unicode", "Lucida Grande");
 pref("font.name-list.monospace.x-unicode", "Menlo, Monaco");
-pref("font.size.variable.x-unicode", 15);
-pref("font.size.monospace.x-unicode", 12);
+// Superhuman look: 17px reading type for HTML and plain-text mail alike.
+pref("font.size.variable.x-unicode", 17);
+pref("font.size.monospace.x-unicode", 17);
 
 pref("font.name.sans-serif.x-western", "Lucida Grande");
 pref("font.name.monospace.x-western", "Menlo");
 pref("font.name-list.sans-serif.x-western", "Lucida Grande");
 pref("font.name-list.monospace.x-western", "Menlo, Monaco");
-pref("font.size.variable.x-western", 15);
-pref("font.size.monospace.x-western", 12);
+pref("font.size.variable.x-western", 17);
+pref("font.size.monospace.x-western", 17);
 
 pref("font.name.sans-serif.x-cyrillic", "Lucida Grande");
 pref("font.name.monospace.x-cyrillic", "Menlo");

@@ -4,22 +4,25 @@
 
 /* ===== superhumanBody.css =============================================
    Loaded into displayed messages (see messageBody.css @import) when
-   mail.superhuman.enabled is true: SF type and a centred reading column
-   for plain-text mail. HTML mail keeps its own layout and only gets the
-   centred column.
+   mail.superhuman.enabled is true: Superhuman's large reading type on a
+   centred column lined up with the thread lines above it.
    ====================================================================== */
 
 /* stylelint-disable-next-line media-query-no-invalid */
 @media -moz-pref("mail.superhuman.enabled") {
   :root {
     --sh-col: 760px;
+    --sh-pad: 52px;
   }
 
   body {
     box-sizing: border-box;
-    max-inline-size: calc(var(--sh-col) + 64px);
+    max-inline-size: calc(var(--sh-col) + 2 * var(--sh-pad));
     margin-inline: auto !important;
-    padding: 6px 32px 48px !important;
+    padding: 8px var(--sh-pad) 12px !important;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+    line-height: 1.6;
+    color: light-dark(#1a1a1a, #f2f2f7);
   }
 
   .moz-text-plain,
@@ -27,13 +30,17 @@
   .moz-text-plain pre,
   .moz-text-flowed pre {
     font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif !important;
-    font-size: 15px !important;
     line-height: 1.6 !important;
-    color: light-dark(#1c1c1e, #f2f2f7);
+    color: light-dark(#1a1a1a, #f2f2f7);
   }
 
   .moz-txt-sig,
   .moz-signature {
-    color: light-dark(#737378, #98989d) !important;
+    color: light-dark(#8a8a8f, #98989d) !important;
+  }
+
+  blockquote[type="cite"] {
+    color: light-dark(#8a8a8f, #98989d);
+    border-inline-start-color: light-dark(#e3e3e8, #3a3a3c) !important;
   }
 }

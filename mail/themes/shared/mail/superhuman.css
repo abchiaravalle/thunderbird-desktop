@@ -3,45 +3,48 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 /* ===== superhuman.css =================================================
-   Superhuman-style look for the 3-pane mail tab, with Liquid Glass panels.
+   Superhuman's list, measured from its own screenshots (ref/TARGET.md):
+   split tabs and rows share one left edge, gradient active tab, 15px rows
+   with no dividers, neutral selection with a violet bar, pastel chips.
    Only active when mail.superhuman.enabled is true (body.superhuman).
    ====================================================================== */
 
-/* stylesheet-wide gate */
+/* stylelint-disable-next-line media-query-no-invalid */
 @media -moz-pref("mail.superhuman.enabled") {
 
 :root {
-  --sh-accent: light-dark(#6b62f0, #8d86ff);
-  --sh-accent-soft: light-dark(rgba(107, 98, 240, 0.08), rgba(141, 134, 255, 0.16));
-  --sh-ink: light-dark(#1c1c1e, #f2f2f7);
+  --sh-violet: light-dark(#714cb6, #a58bf0);
+  --sh-grad: linear-gradient(90deg, #65abff, #b4a2f6);
+  --sh-ink: light-dark(#1a1a1a, #f2f2f7);
   --sh-ink-2: light-dark(#6e6e73, #a1a1a6);
-  --sh-ink-3: light-dark(#737378, #98989d);
+  --sh-ink-3: light-dark(#8a8a8f, #98989d);
+  --sh-count: light-dark(#b3b3b3, #6e6e73);
   --sh-hair: light-dark(rgba(0, 0, 0, 0.06), rgba(255, 255, 255, 0.08));
   --sh-surface: light-dark(#ffffff, #1c1c1e);
-  --sh-row-hover: light-dark(rgba(0, 0, 0, 0.025), rgba(255, 255, 255, 0.04));
-  --sh-glass: light-dark(rgba(255, 255, 255, 0.62), rgba(44, 44, 46, 0.58));
-  --sh-glass-edge: light-dark(rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0.14));
-  --sh-glass-shadow: 0 18px 50px light-dark(rgba(20, 20, 40, 0.18), rgba(0, 0, 0, 0.5)),
-    0 2px 6px light-dark(rgba(20, 20, 40, 0.08), rgba(0, 0, 0, 0.3));
+  --sh-row-hover: light-dark(#fafafa, #232325);
+  --sh-row-sel: light-dark(#f6f6f7, #2a2a2d);
+  --sh-glass: light-dark(rgba(255, 255, 255, 0.72), rgba(44, 44, 46, 0.66));
+  --sh-glass-edge: light-dark(rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0.14));
+  --sh-glass-shadow: 0 24px 60px light-dark(rgba(20, 20, 40, 0.20), rgba(0, 0, 0, 0.55)),
+    0 2px 8px light-dark(rgba(20, 20, 40, 0.08), rgba(0, 0, 0, 0.3));
   --sh-font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
-  --sh-row-h: 44px;
-  --sh-gutter: 28px;
+  --sh-left: 44px;
+  --sh-right: 32px;
+  --sh-row-h: calc(2rem + 22px);
 }
 
 body.superhuman {
   font-family: var(--sh-font);
   color: var(--sh-ink);
   -moz-osx-font-smoothing: grayscale;
-  /* The window under this document is see-through glass (see messenger CSS). */
-  background: transparent;
+  background: var(--sh-surface);
 }
 
-/* ---- Folder pane: floats as a glass sidebar, collapsed by default ---- */
+/* ---- Folder pane: hidden by default (☰ shows it) ---- */
 body.superhuman #folderPane {
-  background: transparent;
-  appearance: auto;
-  -moz-default-appearance: -moz-sidebar;
-  padding-block-start: 8px;
+  background: light-dark(#f7f7f8, #222224);
+  padding-block-start: 10px;
+  border-inline-end: 1px solid var(--sh-hair);
 }
 
 body.superhuman #folderPaneHeaderBar {
@@ -51,8 +54,8 @@ body.superhuman #folderPaneHeaderBar {
 
 body.superhuman #folderTree {
   background: transparent;
-  --treeitem-background-active: var(--sh-accent-soft);
-  --treeitem-text-active: var(--sh-accent);
+  --treeitem-background-active: light-dark(#ebe7f6, #3a3450);
+  --treeitem-text-active: var(--sh-ink);
 
   & li > .container {
     border-radius: 8px;
@@ -64,35 +67,27 @@ body.superhuman #folderPaneSplitter {
   opacity: 0;
 }
 
-/* ---- Thread pane: the calm white content surface ---- */
 body.superhuman #threadPane {
   background: var(--sh-surface);
-  border-start-start-radius: 0;
 }
 
-body.superhuman.superhuman-folders-open #threadPane {
-  border-start-start-radius: 14px;
-  box-shadow: -1px 0 0 var(--sh-hair);
-}
-
-/* Hide stock chrome Superhuman doesn't have. */
 body.superhuman #threadPaneHeaderBar,
 body.superhuman #quickFilterBar,
 body.superhuman #messagePaneSplitter {
   display: none !important;
 }
 
-/* ---- Split inbox tabs ---- */
+/* ---- Split tabs ---- */
 #superhumanSplits {
   display: none;
 }
 
 body.superhuman #superhumanSplits:not([hidden]) {
   display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 18px var(--sh-gutter) 14px 14px;
-  border-block-end: 1px solid var(--sh-hair);
+  align-items: baseline;
+  gap: 26px;
+  padding: 22px var(--sh-right) 14px var(--sh-left);
+  position: relative;
   font-family: var(--sh-font);
   flex-shrink: 0;
 
@@ -102,25 +97,30 @@ body.superhuman #superhumanSplits:not([hidden]) {
     border: none;
     background: none;
     margin: 0;
+    padding: 0;
     min-inline-size: 0;
     min-block-size: 0;
     cursor: default;
   }
 
+  /* Two thin lines, hung in the left margin like Superhuman's. */
   & .superhuman-menu {
-    inline-size: 32px;
-    block-size: 28px;
-    margin-inline-end: 8px;
-    border-radius: 8px;
+    position: absolute;
+    inset-inline-start: 16px;
+    inset-block-start: 26px;
+    inline-size: 20px;
+    block-size: 16px;
+    border-radius: 4px;
     background-image:
-      linear-gradient(var(--sh-ink-2), var(--sh-ink-2)),
-      linear-gradient(var(--sh-ink-2), var(--sh-ink-2));
+      linear-gradient(var(--sh-ink-3), var(--sh-ink-3)),
+      linear-gradient(var(--sh-ink-3), var(--sh-ink-3));
     background-size: 16px 1.5px, 16px 1.5px;
-    background-position: center 10px, center 16px;
+    background-position: center 4px, center 10px;
     background-repeat: no-repeat;
+    opacity: 0.8;
 
     &:hover {
-      background-color: var(--sh-row-hover);
+      opacity: 1;
     }
   }
 
@@ -128,71 +128,53 @@ body.superhuman #superhumanSplits:not([hidden]) {
     display: inline-flex;
     align-items: baseline;
     gap: 6px;
-    padding: 6px 12px;
-    border-radius: 999px;
-    font-size: 17px;
+    font-size: calc(1rem + 8px);
     font-weight: 400;
     letter-spacing: -0.01em;
     color: var(--sh-ink-3);
-    transition: color 120ms ease, background-color 120ms ease;
+    transition: color 120ms ease;
 
     &:hover {
       color: var(--sh-ink-2);
     }
 
-    &.active {
-      color: var(--sh-accent);
-    }
-
-    & .split-count:empty {
-      display: none;
+    &.active .split-name {
+      background: var(--sh-grad);
+      background-clip: text;
+      color: transparent;
     }
 
     & .split-count {
-      font-size: 14px;
-      color: var(--sh-ink-3);
+      font-size: calc(1rem + 3px);
+      color: var(--sh-count);
       font-variant-numeric: tabular-nums;
+
+      &:empty {
+        display: none;
+      }
     }
 
     &.active .split-count {
-      color: color-mix(in srgb, var(--sh-accent) 55%, transparent);
+      color: #a9b6f8;
     }
   }
 
-  & .superhuman-spacer {
-    flex: 1;
-  }
-
+  & .superhuman-spacer,
   & .superhuman-pill {
-    padding: 5px 12px;
-    border-radius: 999px;
-    font-size: 12.5px;
-    color: var(--sh-ink-2);
-    background: var(--sh-glass);
-    box-shadow: inset 0 0 0 0.5px var(--sh-hair), inset 0 1px 0 var(--sh-glass-edge);
-    backdrop-filter: blur(20px) saturate(180%);
-
-    &:hover {
-      color: var(--sh-ink);
-    }
-  }
-
-  & .superhuman-kbd {
-    font-family: ui-monospace, "SF Mono", monospace;
-    font-size: 11.5px;
+    display: none;
   }
 }
 
-/* ---- Message rows: single line, Superhuman columns ---- */
+/* ---- Rows ---- */
 body.superhuman #threadTree {
   --tree-card-background: transparent;
   --tree-card-background-hover: var(--sh-row-hover);
-  --tree-card-background-selected: var(--sh-accent-soft);
-  --tree-card-background-selected-current: var(--sh-accent-soft);
+  --tree-card-background-selected: var(--sh-row-sel);
+  --tree-card-background-selected-current: var(--sh-row-sel);
   --tree-card-border: transparent;
   --tree-card-border-selected: transparent;
   --tree-card-box-shadow: none;
-  padding-block: 4px 24px;
+  padding-block: 2px 28px;
   font-family: var(--sh-font);
   background: var(--sh-surface);
 
@@ -209,7 +191,7 @@ body.superhuman #threadTree {
       align-items: center;
       block-size: var(--sh-row-h);
       margin: 0 !important;
-      padding: 0 var(--sh-gutter) 0 0 !important;
+      padding: 0 var(--sh-right) 0 0 !important;
       border: none !important;
       border-radius: 0 !important;
       box-shadow: none !important;
@@ -217,18 +199,18 @@ body.superhuman #threadTree {
       position: relative;
     }
 
-    /* the thin accent bar on the selected row's left edge */
-    &.selected .card-container::before {
-      content: "";
-      position: absolute;
-      inset-block: 0;
-      inset-inline-start: 0;
-      inline-size: 3px;
-      background: var(--sh-accent);
-    }
+    &.selected .card-container,
+    &.current.selected .card-container {
+      background: var(--sh-row-sel) !important;
 
-    &.selected .card-container {
-      background: var(--sh-accent-soft) !important;
+      &::before {
+        content: "";
+        position: absolute;
+        inset-block: 0;
+        inset-inline-start: 0;
+        inline-size: 3px;
+        background: var(--sh-violet);
+      }
     }
 
     &:hover:not(.selected) .card-container {
@@ -239,11 +221,7 @@ body.superhuman #threadTree {
       display: none !important;
     }
 
-    /* Flatten the two card columns into one row: [sender][chips subject preview][date] */
-    & .card-container > .thread-card-column:not(.read-status-column) {
-      display: contents !important;
-    }
-
+    & .card-container > .thread-card-column:not(.read-status-column),
     & .thread-card-row,
     & .thread-card-dynamic-row {
       display: contents !important;
@@ -255,18 +233,19 @@ body.superhuman #threadTree {
     & .sort-header-details,
     & thread-card-tags,
     & .attachment-icon,
-    & .button-spam {
+    & .button-spam,
+    & .button-star {
       display: none !important;
     }
 
     & .sender {
       order: 1;
-      flex: 0 0 210px !important;
-      inline-size: 210px;
-      padding-inline: calc(var(--sh-gutter) + 6px) 16px !important;
-      margin: 0 !important;
+      flex: 0 0 236px !important;
+      inline-size: 236px;
       box-sizing: border-box;
-      font-size: 14px !important;
+      padding: 0 20px 0 var(--sh-left) !important;
+      margin: 0 !important;
+      font-size: calc(1rem + 4px) !important;
       font-weight: 400 !important;
       color: var(--sh-ink);
       white-space: nowrap;
@@ -275,22 +254,15 @@ body.superhuman #threadTree {
     }
 
     & button.twisty {
-      order: 2;
-      flex: 0 0 auto;
-      margin-inline-end: 6px;
-      font-size: 11px;
+      display: none !important;
+    }
+
+    & .sender[data-count]:not([data-count=""])::after {
+      content: "  " attr(data-count);
+      white-space: pre;
+      font-size: calc(1rem + 2px);
+      font-weight: 400;
       color: var(--sh-ink-3);
-      background: transparent !important;
-      border: none !important;
-
-      &:not(:has(.thread-replies:not(:empty))) {
-        display: none !important;
-      }
-
-      & .replies-icon,
-      & .twisty-icon {
-        display: none;
-      }
     }
 
     & .thread-card-subject-container {
@@ -299,38 +271,11 @@ body.superhuman #threadTree {
       min-inline-size: 0;
       display: flex !important;
       align-items: center;
-      gap: 8px;
+      gap: 10px;
       padding: 0 !important;
       white-space: nowrap;
       overflow: hidden;
-      -webkit-mask-image: linear-gradient(to right, black 92%, transparent);
-    }
-
-    & .subject {
-      flex: 0 0 auto !important;
-      inline-size: auto !important;
-      max-inline-size: 70%;
-      font-size: 14px;
-      font-weight: 400 !important;
-      color: var(--sh-ink) !important;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-
-    & .superhuman-preview {
-      flex: 1 1 0;
-      min-inline-size: 0;
-      margin-inline-start: 6px;
-      font-size: 14px;
-      font-weight: 400 !important;
-      color: var(--sh-ink-3);
-      overflow: hidden;
-      white-space: nowrap;
-
-      &:empty {
-        display: none;
-      }
+      mask-image: linear-gradient(to right, black calc(100% - 48px), transparent);
     }
 
     & .superhuman-chips {
@@ -345,13 +290,38 @@ body.superhuman #threadTree {
 
     & .superhuman-chip {
       display: inline-block;
-      padding: 1px 7px 2px;
+      padding: 0 6px;
       border-radius: 4px;
-      font-size: 12px;
-      line-height: 16px;
+      font-size: calc(1rem + 1.5px);
+      line-height: 19px;
       color: #fff;
-      font-weight: 500;
-      background: color-mix(in srgb, var(--chip) 48%, white);
+      background: color-mix(in oklab, var(--chip) 78%, white);
+    }
+
+    & .subject {
+      flex: 0 0 auto !important;
+      inline-size: auto !important;
+      max-inline-size: 70%;
+      font-size: calc(1rem + 4px);
+      font-weight: 400 !important;
+      color: var(--sh-ink) !important;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    & .superhuman-preview {
+      flex: 1 1 0;
+      min-inline-size: 0;
+      font-size: calc(1rem + 4px);
+      font-weight: 400 !important;
+      color: var(--sh-ink-3);
+      overflow: hidden;
+      white-space: nowrap;
+
+      &:empty {
+        display: none;
+      }
     }
 
     & .thread-card-icon-info {
@@ -359,27 +329,16 @@ body.superhuman #threadTree {
       flex: 0 0 auto;
       display: flex !important;
       align-items: center;
-      gap: 6px;
-      margin-inline-start: 12px;
     }
 
-    & .button-star {
-      display: none !important;
-    }
-
-    &[data-properties~="flagged"] .button-star {
-      display: inline-flex !important;
-      color: #f5a524;
-    }
-
-    /* Read receipts column (sent mail): "Seen N" or a quiet check */
+    /* Read receipts (sent mail): "✓✓ Seen 3" in violet, or a quiet check. */
     & .superhuman-receipt {
       order: 4;
       flex: 0 0 auto;
       min-inline-size: 64px;
       margin-inline-start: 12px;
       text-align: end;
-      font-size: 12px;
+      font-size: calc(1rem + 1.5px);
       font-weight: 500;
       white-space: nowrap;
       font-variant-numeric: tabular-nums;
@@ -389,12 +348,12 @@ body.superhuman #threadTree {
       }
 
       &[data-state="opened"] {
-        color: var(--sh-accent);
+        color: var(--sh-violet);
 
         &::before {
-          content: "✓✓ ";
-          letter-spacing: -0.2em;
-          margin-inline-end: 4px;
+          content: "✓✓";
+          letter-spacing: -0.25em;
+          margin-inline-end: 7px;
         }
       }
 
@@ -412,16 +371,15 @@ body.superhuman #threadTree {
     & .date {
       order: 5;
       flex: 0 0 auto;
-      margin-inline-start: 14px;
-      font-size: 12.5px;
+      margin-inline-start: 18px;
+      font-size: calc(1rem + 2px);
       color: var(--sh-ink-3);
       font-variant-numeric: tabular-nums;
       text-align: end;
-      min-inline-size: 58px;
+      min-inline-size: 56px;
       opacity: 1 !important;
     }
 
-    /* unread: bolder sender + subject (Superhuman uses weight, not dots) */
     &[data-properties~="unread"] {
       & .sender,
       & .subject {
@@ -430,14 +388,14 @@ body.superhuman #threadTree {
 
       & .date {
         color: var(--sh-ink);
-        font-weight: 600;
       }
     }
 
-    /* thread children: indent like Superhuman's stacked replies */
-    &[data-properties~="thread-children"] .sender {
-      padding-inline-start: calc(var(--sh-gutter) + 22px);
-      color: var(--sh-ink-2);
+    &[data-properties~="flagged"] .date::before {
+      content: "★";
+      margin-inline-end: 8px;
+      color: #f5b041;
+      font-size: calc(1rem + 1px);
     }
   }
 }
@@ -451,7 +409,6 @@ body.superhuman #placeholderNoMessages:not([hidden]) {
 
 /* ---- Full-width reading view (Enter opens, Esc closes) ---- */
 body.superhuman {
-  /* list-first: the message pane only shows while reading */
   &:not(.superhuman-reading) {
     &.layout-classic,
     &.layout-vertical,
@@ -486,39 +443,48 @@ body.superhuman {
   }
 }
 
-/* ---- Toast: dark pill at the bottom ---- */
+/* ---- Toast: Superhuman's gradient pill with an UNDO chip ---- */
 #superhumanToast {
   position: fixed;
-  inset-block-end: 26px;
+  inset-block-end: 28px;
   inset-inline-start: 50%;
   transform: translate(-50%, 12px);
   display: flex;
-  gap: 14px;
+  gap: 18px;
   align-items: center;
-  padding: 10px 16px;
-  border-radius: 12px;
+  padding: 10px 10px 10px 22px;
+  border-radius: 14px;
   font-family: var(--sh-font);
-  font-size: 13px;
+  font-size: calc(1rem + 4px);
   color: #fff;
-  background: rgba(28, 28, 30, 0.86);
-  backdrop-filter: blur(24px) saturate(180%);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  background: linear-gradient(90deg, #6aa8ff, #b29ef5);
+  box-shadow: 0 12px 30px rgba(80, 90, 200, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.25);
   opacity: 0;
   transition: opacity 180ms ease, transform 220ms cubic-bezier(0.2, 0.9, 0.3, 1.2);
   z-index: 100;
   pointer-events: none;
+  white-space: nowrap;
 
   &.show {
     opacity: 1;
     transform: translate(-50%, 0);
   }
 
+  &:not(:has(.toast-hint)) {
+    padding-inline-end: 22px;
+  }
+
   & .toast-hint {
-    color: rgba(255, 255, 255, 0.55);
+    padding: 5px 12px;
+    border-radius: 9px;
+    font-size: calc(1rem + 2px);
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    background: rgba(255, 255, 255, 0.24);
   }
 }
 
-/* ---- ⌘K palette: Liquid Glass card ---- */
+/* ---- ⌘K palette: a Liquid Glass card ---- */
 #superhumanPalette {
   position: fixed;
   inset: 0;
@@ -526,9 +492,8 @@ body.superhuman {
   display: flex;
   justify-content: center;
   align-items: flex-start;
-  padding-block-start: 14vh;
-  background: light-dark(rgba(245, 245, 250, 0.25), rgba(0, 0, 0, 0.25));
-  backdrop-filter: blur(2px);
+  padding-block-start: 12vh;
+  background: light-dark(rgba(20, 20, 30, 0.10), rgba(0, 0, 0, 0.35));
 
   &[hidden] {
     display: none;
@@ -536,14 +501,14 @@ body.superhuman {
 
   & .palette-card {
     inline-size: min(620px, 86vw);
-    max-block-size: 62vh;
+    max-block-size: calc(37px * 12 + 70px);
     display: flex;
     flex-direction: column;
-    border-radius: 22px;
+    border-radius: 20px;
     background: var(--sh-glass);
     backdrop-filter: blur(40px) saturate(190%);
     box-shadow: var(--sh-glass-shadow), inset 0 1px 0 var(--sh-glass-edge),
-      inset 0 0 0 0.5px light-dark(rgba(0, 0, 0, 0.08), rgba(255, 255, 255, 0.1));
+      inset 0 0 0 0.5px light-dark(rgba(0, 0, 0, 0.10), rgba(255, 255, 255, 0.12));
     overflow: hidden;
     font-family: var(--sh-font);
     animation: sh-pop 220ms cubic-bezier(0.2, 0.9, 0.3, 1.15);
@@ -567,27 +532,33 @@ body.superhuman {
   & .palette-list {
     list-style: none;
     margin: 0;
-    padding: 6px;
+    padding: 6px 6px 10px;
     overflow-y: auto;
+    min-block-size: 0;
   }
 
   & li {
+    position: relative;
     display: flex;
     align-items: center;
     justify-content: space-between;
     padding: 9px 14px;
-    border-radius: 11px;
-    font-size: 14px;
+    border-radius: 10px;
+    font-size: calc(1rem + 3px);
     color: var(--sh-ink);
     cursor: default;
 
     &.selected {
-      background: var(--sh-accent);
-      color: #fff;
+      background: light-dark(rgba(0, 0, 0, 0.05), rgba(255, 255, 255, 0.08));
 
-      & kbd {
-        color: rgba(255, 255, 255, 0.85);
-        background: rgba(255, 255, 255, 0.18);
+      &::before {
+        content: "";
+        position: absolute;
+        inset-block: 8px;
+        inset-inline-start: 4px;
+        inline-size: 3px;
+        border-radius: 2px;
+        background: var(--sh-violet);
       }
     }
   }
@@ -611,7 +582,7 @@ body.superhuman {
     block-size: 9px;
     border-radius: 3px;
     margin-inline-end: 9px;
-    background: var(--chip);
+    background: color-mix(in oklab, var(--chip) 78%, white);
   }
 }
 
@@ -630,15 +601,12 @@ body.superhuman {
   }
 }
 
-/* Reduce transparency: solid surfaces, no blur. */
 @media (prefers-reduced-transparency: reduce) {
   :root {
     --sh-glass: light-dark(#f7f7f9, #2c2c2e);
   }
 
-  #superhumanPalette .palette-card,
-  #superhumanSplits .superhuman-pill,
-  #superhumanToast {
+  #superhumanPalette .palette-card {
     backdrop-filter: none;
   }
 }

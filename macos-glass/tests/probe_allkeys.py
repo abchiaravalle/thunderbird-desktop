@@ -27,12 +27,12 @@ return true;
 STATE = A3 + """
 const v = a.gDBView; const n = v ? v.numSelected : 0;
 const h = n ? v.hdrForFirstSelectedMessage : null;
-return {sel: a.threadTree.selectedIndex, cur: a.threadTree.currentIndex, numSel: n, rows: v ? v.rowCount : -1,
+return {sel: a.threadTree.selectedIndex, cur: a.threadTree.currentIndex, numSel: a.threadTree.selectedIndices.length, msgs: n, rows: v ? v.rowCount : -1,
   subj: h ? h.mime2DecodedSubject : null, flagged: h ? h.isFlagged : null, read: h ? h.isRead : null,
   tags: h ? h.getStringProperty('keywords').trim() : null, killed: h ? !!(a.gDBView.getThreadContainingMsgHdr(h).flags & Ci.nsMsgMessageFlags.Ignored) : null,
   reading: s.reading, palette: s.paletteOpen, paletteQ: s._paletteInput.value, split: s.activeSplit,
   folder: a.gFolder ? a.gFolder.URI.split('/').pop() : null, folders: !a.paneLayout.folderPaneSplitter.isCollapsed,
-  toast: s.lastToast || null, zoom: Math.round((top.ZoomManager ? top.ZoomManager.getZoomForBrowser(a.messageBrowser) : 1) * 100) / 100,
+  toast: s.lastToast || null, zoom: ChromeUtils.importESModule('resource:///modules/UIFontSize.sys.mjs').UIFontSize.size, pmode: s._paletteMode || null, search: s.searchText || null,
   qf: JSON.stringify(a.quickFilterBar.filterer.filterValues), focus: (document.activeElement||{}).localName,
   composeWins: [...Services.wm.getEnumerator('msgcompose')].length,
   wins3: [...Services.wm.getEnumerator('mail:3pane')].length,
@@ -104,9 +104,12 @@ key("ArrowDown", metaKey=True); s1 = st(); check("Cmd+Down jump to bottom", s1["
 key("ArrowUp", metaKey=True); check("Cmd+Up jump to top", st()["sel"] == 0, st())
 key(" "); check("Space scrolls list down", st()["sel"] > 0, st())
 key(" ", shiftKey=True); check("Shift+Space scrolls back up", st()["sel"] == 0, st())
-key("Enter"); check("Enter opens conversation", st()["reading"] is True, st())
-key("n"); s2 = st(); check("N next message (in conversation)", s2["sel"] == 1, s2)
-key("p"); check("P previous message", st()["sel"] == 0, st())
+m.js(A3 + "for (let i=0;i<a.gDBView.rowCount;i++) if (/Q2 Review/.test(a.gDBView.getMsgHdrAt(i).mime2DecodedSubject)) { a.threadTree.selectedIndex=i; break; }")
+key("Enter"); s2 = st(); check("Enter opens conversation (on newest message)", s2["reading"] is True and cur_mid() == "thread-q2-review-2@example.com", [cur_mid(), s2])
+newest = cur_mid(); key("p"); prev = cur_mid(); key("p"); first = cur_mid()
+check("P previous message in conversation", newest != prev != first and newest != first, [newest, prev, first])
+key("n"); key("n"); check("N next message in conversation", cur_mid() == newest, [cur_mid(), newest])
+key("n"); check("N at last message stays put", cur_mid() == newest and "Last message" in (st()["toast"] or ""), st())
 m.js(A3 + "s._bodyDocument().body.insertAdjacentHTML('beforeend', '<p><a href=\"https://example.com/a\">a</a> <a href=\"https://example.com/b\">b</a></p>')")
 key("Tab"); f1 = m.js(A3 + "return s._bodyDocument().activeElement.href || null")
 key("Tab"); f2 = m.js(A3 + "return s._bodyDocument().activeElement.href || null")
@@ -124,7 +127,7 @@ reset()
 key("J", shiftKey=True); key("J", shiftKey=True); check("Shift+J extends selection down", st()["numSel"] == 3, st())
 key("K", shiftKey=True); check("Shift+K extends (moves) selection up", st()["numSel"] >= 2, st())
 reset(index=1)
-key("a", metaKey=True); s3 = st(); check("Cmd+A selects from here down", s3["numSel"] == s3["rows"] - 1, s3)
+start = st()["cur"]; key("a", metaKey=True); s3 = st(); check("Cmd+A selects from here down", s3["numSel"] == s3["rows"] - start and start >= 0, [start, s3])
 key("A", metaKey=True, shiftKey=True); s3 = st(); check("Cmd+Shift+A selects all", s3["numSel"] == s3["rows"], s3)
 
 # ---------------------------------------------------------------- triage
@@ -168,11 +171,23 @@ key("v"); s10 = st(); check("V opens move picker", s10["palette"] and s10["palet
 key("Escape")
 
 # ---------------------------------------------------------------- compose
-for k, label, want_cmd, prefix in [("c", "C compose", "cmd_newMessage", ""), ("r", "R reply", "cmd_replySender", "Re:"), ("f", "F forward", "cmd_forwardInline", "Fwd:")]:
+reset(); key("Enter"); sleep(1.5); key("r"); sleep(0.6)
+foc = m.js(A3 + "const d=a.messageBrowser.contentDocument; return d.activeElement && d.activeElement.className")
+check("R in a message = inline reply box", foc == "sh-reply-text", foc)
+m.js(A3 + "a.messageBrowser.contentDocument.activeElement.blur();"); key("Escape")
+reset(); key("r"); sleep(1.5)
+foc = m.js(A3 + "const d=a.messageBrowser.contentDocument; return [d.activeElement && d.activeElement.className, d.querySelector('.sh-reply-kind') && d.querySelector('.sh-reply-kind').textContent]")
+check("R from list opens conversation with reply box", st()["reading"] is True and foc[0] == "sh-reply-text" and foc[1] == "Reply", foc)
+m.js(A3 + "a.messageBrowser.contentDocument.activeElement.blur();"); key("Escape")
+for k, label, want_cmd, prefix in [("c", "C compose", "cmd_newMessage", ""), ("f", "F forward", "cmd_forwardInline", "Fwd:")]:
     reset(); cmds(); key(k); sleep(3); subj_c = compose_subject(); c = cmds()
     check(label, want_cmd in c and subj_c is not None and subj_c.startswith(prefix), [c, subj_c]); close_compose()
-reset(); key("Enter"); cmds(); key("Enter"); sleep(3); c = cmds(); subj_c = compose_subject()
-check("Enter in a message = reply all", "cmd_replyall" in c and (subj_c or "").startswith("Re:"), [c, subj_c]); close_compose()
+reset(); key("Enter"); sleep(1.5); key("Enter"); sleep(0.6)
+foc = m.js(A3 + "const d=a.messageBrowser.contentDocument; return d.activeElement && d.activeElement.className")
+kind = m.js(A3 + "return a.messageBrowser.contentDocument.querySelector('.sh-reply-kind').textContent")
+check("Enter in a message = reply all box", foc == "sh-reply-text" and kind == "Reply all", [foc, kind])
+m.js(A3 + "a.messageBrowser.contentDocument.activeElement.blur(); a.document.getElementById('messagePane').focus();")
+key("Escape")
 
 # ---------------------------------------------------------------- go-to
 m.js("""const {MailServices} = ChromeUtils.importESModule('resource:///modules/MailServices.sys.mjs');
@@ -209,13 +224,15 @@ reset()
 key("k", metaKey=True); check("Cmd+K palette", st()["palette"] is True, st()); key("Escape")
 check("Esc closes palette", st()["palette"] is False, st())
 key("?", shiftKey=True); check("? shortcuts list", st()["palette"] is True, st()); key("Escape")
-key("/"); foc = m.js("const e = document.activeElement; return e ? (e.closest && e.closest('global-search-bar') ? 'global-search-bar' : e.localName) : null")
-check("/ search (focuses search box)", foc == "global-search-bar", foc)
+reset(); key("/"); s17 = st(); check("/ opens search", s17["palette"] and s17["pmode"] == "search", s17)
+m.js(A3 + "s._paletteInput.value = 'Board'; s._renderPalette();"); key("Enter"); sleep(1.2); s17 = st()
+check("/ search filters the list", s17["search"] == "Board" and s17["rows"] >= 1 and "Board" in (s17["subj"] or m.js(A3 + "return a.gDBView.getMsgHdrAt(0).mime2DecodedSubject")), s17)
+m.js(A3 + "a.threadTree.table.body.focus()"); key("Escape"); sleep(0.8); check("Esc clears search", st()["search"] in (None, ""), st())
 m.js(A3 + "a.threadTree.table.body.focus()")
-z0 = m.js("return top.ZoomManager ? top.ZoomManager.zoom : null")
-key("=", metaKey=True); z1 = m.js("return top.ZoomManager ? top.ZoomManager.zoom : null")
-key("-", metaKey=True); key("-", metaKey=True); z2 = m.js("return top.ZoomManager ? top.ZoomManager.zoom : null")
-key("0", metaKey=True); z3 = m.js("return top.ZoomManager ? top.ZoomManager.zoom : null")
+Z = "return ChromeUtils.importESModule('resource:///modules/UIFontSize.sys.mjs').UIFontSize.size"
+z0 = m.js(Z); key("=", metaKey=True); z1 = m.js(Z)
+key("-", metaKey=True); key("-", metaKey=True); z2 = m.js(Z)
+key("0", metaKey=True); z3 = m.js(Z)
 check("Cmd+= / Cmd+- / Cmd+0 text size", z1 is not None and z1 > z0 and z2 < z1 and z3 == z0, [z0, z1, z2, z3])
 reset(); key("/", ctrlKey=True); check("Ctrl+/ copy link", (st()["copied"] or "").startswith("mid:"), st())
 reset(); m.js(A3 + "s.go('SentMail')"); sleep(1); key("1", ctrlKey=True); sleep(0.8); s16 = st()

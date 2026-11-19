@@ -26,9 +26,8 @@ PEOPLE = [
 ]
 # (sender idx, tag keyword or "", subject, snippet, unread, starred)
 MAIL = [
-    (0, "$label1", "Application for Product Manager position", "Hi there, I'm excited to apply for the PM role. My portfolio and resume are attached for your review.", 1, 0),
-    (1, "$label1", "Hyperfusion <> Northwind Q2 Review", "A meeting to review Q2 results and plan the next quarter. Agenda attached, please add topics.", 1, 0),
-    (2, "$label1", "Final contract signature needed", "Sending over the final version of the MSA. Two small edits on page 4, otherwise ready to sign.", 1, 1),
+    (0, "$label1 $label5", "Application for Product Manager position", "Hi there, I'm excited to apply for the PM role. My portfolio and resume are attached for your review.", 1, 0),
+    (2, "$label1 $label2", "Final contract signature needed", "Sending over the final version of the MSA. Two small edits on page 4, otherwise ready to sign.", 1, 1),
     (3, "$label4", "eTicket Itinerary and Receipt for Confirmation K7Q2LM", "Thank you for flying with us. Your trip to San Francisco on Dec 4 is confirmed. Seat 12A.", 0, 0),
     (4, "", "Q3 customer survey results", "Hey team, sharing the results from the Q3 survey. NPS went up 9 points, details inside.", 0, 0),
     (5, "", "Roadmap updates", "We've finalized our roadmap for the first half. Three big bets and a few smaller polish items.", 0, 0),
@@ -58,7 +57,7 @@ MAIL = [
     (8, "", "Re: Book club pick", "I vote for the short one this time. Last month's was 600 pages.", 0, 0),
     (3, "", "Your trip is coming up", "Check in opens 24 hours before departure. Add your trip to your calendar.", 0, 0),
     (6, "", "Support ticket #2210 resolved", "The sync issue is fixed in the latest release. Let us know if it comes back.", 0, 0),
-    (9, "$label1", "Security review findings", "Three medium findings, no highs. Full report attached with suggested fixes.", 0, 0),
+    (9, "$label1 $label4", "Security review findings", "Three medium findings, no highs. Full report attached with suggested fixes.", 0, 0),
     (15, "", "The weekly roundup", "Ten links worth your time, a new tool for writing changelogs, and a reader question.", 0, 0),
     (7, "", "Lunch next week?", "Want to grab lunch next week? Tuesday or Wednesday works for me.", 0, 0),
     (11, "", "Re: Onboarding copy", "Made the edits, thanks for the quick review. Shipping it Monday.", 0, 0),
@@ -115,6 +114,21 @@ def main():
         msg = mbox_msg(PEOPLE[si], ME, subj, body, t, unread, star, tag, mid)
         if si == 15:
             msg = msg.replace("MIME-Version: 1.0", "List-Unsubscribe: <https://example.com/unsubscribe?u=42>, <mailto:unsubscribe@producthunt.example.com>\nMIME-Version: 1.0", 1)
+        inbox.append(msg)
+    # A real back-and-forth thread (Superhuman stacks these in one conversation).
+    thread_root = "thread-q2-review"
+    convo = [
+        (PEOPLE[1], ME, "Hyperfusion <> Northwind Q2 Review", "A meeting to review Q2 results and plan the next quarter. Agenda attached, please add topics.", 0),
+        (ME, PEOPLE[1], "Re: Hyperfusion <> Northwind Q2 Review", "Thanks Savannah. I added two topics: pipeline coverage and the pricing pilot.", 1),
+        (PEOPLE[1], ME, "Re: Hyperfusion <> Northwind Q2 Review", "Perfect. Can you also bring the churn numbers? Thursday at 2pm still works for us.", 2),
+    ]
+    for j, (frm, to, subj, text, n) in enumerate(convo):
+        tt = now - datetime.timedelta(hours=6 - 2 * j)
+        mid = f"{thread_root}-{j}"
+        msg = mbox_msg(frm, to, subj, text + "\n\n" + frm[0].split()[0] + "\n", tt, 1 if j == 2 else 0, 0, "$label1", mid)
+        if j:
+            refs = " ".join(f"<{thread_root}-{k}@example.com>" for k in range(j))
+            msg = msg.replace("MIME-Version: 1.0", f"In-Reply-To: <{thread_root}-{j-1}@example.com>\nReferences: {refs}\nMIME-Version: 1.0", 1)
         inbox.append(msg)
     with open(os.path.join(lf, "Inbox"), "w") as f:
         f.write("".join(inbox))

@@ -84,14 +84,14 @@ class ThreadCard extends TreeViewTableRow {
             : "Not opened yet";
     }
     for (const key of (tagKeys || "").split(" ").filter(Boolean)) {
-      const tag = ThreadCard.#tagInfo(key);
-      if (!tag) {
+      const info = window.superhuman.chipFor(key);
+      if (!info) {
         continue;
       }
       const chip = document.createElement("span");
       chip.className = "superhuman-chip";
-      chip.textContent = tag.tag.toLowerCase();
-      chip.style.setProperty("--chip", tag.color || "#8e8e93");
+      chip.textContent = info.text;
+      chip.style.setProperty("--chip", info.color);
       this.chips.appendChild(chip);
     }
     this.previewLine.textContent = window.superhuman.previewFor(this._index);
@@ -104,21 +104,6 @@ class ThreadCard extends TreeViewTableRow {
     if (name && name != this.senderLine.textContent) {
       this.senderLine.textContent = name;
     }
-  }
-
-  static #tagCache = null;
-
-  static #tagInfo(key) {
-    if (!ThreadCard.#tagCache) {
-      ThreadCard.#tagCache = new Map(
-        MailServices.tags.getAllTags().map(t => [t.key, t])
-      );
-      // Rebuild if tags are edited.
-      Services.prefs.addObserver("mailnews.tags.", () => {
-        ThreadCard.#tagCache = null;
-      });
-    }
-    return ThreadCard.#tagCache.get(key);
   }
 
   fillRow() {
@@ -208,6 +193,9 @@ class ThreadCard extends TreeViewTableRow {
 
     this.threadCardTags.setAttribute("tags", data.tagKeys);
     this.#fillSuperhuman(data.tagKeys, false);
+    // Superhuman shows a conversation's size as a small grey number.
+    const total = parseInt(data.total);
+    this.senderLine.dataset.count = total > 1 ? String(total) : "";
 
     // Follow the layout order.
     ariaLabelPromises.push(data.sender);

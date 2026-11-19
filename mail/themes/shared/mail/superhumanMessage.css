@@ -3,187 +3,217 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 /* ===== superhumanMessage.css ==========================================
-   Superhuman-style reading view for about:message: one calm centred
-   column, large subject, quiet sender line, round glass action buttons.
+   Superhuman's open conversation, from its own screenshots: earlier
+   messages folded to one line each, a quiet "↩ Me to Colleen" line, the
+   body in large type, and a reply card under it with plain text actions.
+   Thunderbird's header (avatar, buttons, To/Cc, tags) is not shown.
    Only active when mail.superhuman.enabled is true.
    ====================================================================== */
 
 /* stylelint-disable-next-line media-query-no-invalid */
 @media -moz-pref("mail.superhuman.enabled") {
   :root {
-    --sh-accent: light-dark(#6b62f0, #8d86ff);
-    --sh-ink: light-dark(#1c1c1e, #f2f2f7);
+    --sh-violet: light-dark(#714cb6, #a58bf0);
+    --sh-grad: linear-gradient(90deg, #65abff, #b4a2f6);
+    --sh-ink: light-dark(#1a1a1a, #f2f2f7);
     --sh-ink-2: light-dark(#6e6e73, #a1a1a6);
-    --sh-ink-3: light-dark(#737378, #98989d);
-    --sh-hair: light-dark(rgba(0, 0, 0, 0.06), rgba(255, 255, 255, 0.08));
+    --sh-ink-3: light-dark(#8a8a8f, #98989d);
+    --sh-hair: light-dark(rgba(0, 0, 0, 0.07), rgba(255, 255, 255, 0.09));
     --sh-surface: light-dark(#ffffff, #1c1c1e);
-    --sh-glass: light-dark(rgba(255, 255, 255, 0.62), rgba(44, 44, 46, 0.58));
-    --sh-glass-edge: light-dark(rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0.14));
+    --sh-glass: light-dark(rgba(255, 255, 255, 0.86), rgba(44, 44, 46, 0.86));
+    --sh-glass-edge: light-dark(rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0.14));
     --sh-font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
     --sh-col: 760px;
+    --sh-pad: 52px;
     font-family: var(--sh-font);
   }
 
-  body {
-    background: var(--sh-surface);
+  body,
+  #messagepane,
+  #messagepanebox,
+  #messagepaneboxwrapper {
+    background: var(--sh-surface) !important;
   }
 
-  #messageHeader {
-    display: grid !important;
-    grid-template-columns: 1fr;
-    gap: 6px;
+  /* One scrolling column: thread lines, message, reply. */
+  #messagepanebox {
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+
+  #messagepanebox > * {
+    flex-shrink: 0;
+  }
+
+  /* Thunderbird's header block is replaced by the thread lines. */
+  #msgHeaderView,
+  #messageHeader,
+  #mail-notification-top:not(:has(notification-message)) {
+    display: none !important;
+  }
+
+  /* ---- Earlier messages, one line each ---- */
+  #superhumanThread {
     box-sizing: border-box;
-    inline-size: min(100%, calc(var(--sh-col) + 64px));
+    inline-size: min(100%, calc(var(--sh-col) + 2 * var(--sh-pad)));
     margin-inline: auto;
-    padding: 28px 32px 18px !important;
-    background: transparent !important;
-    border: none !important;
-    box-shadow: none !important;
+    padding: 30px var(--sh-pad) 0;
     font-family: var(--sh-font);
+  }
+
+  .sh-collapsed {
+    display: grid;
+    grid-template-columns: 96px 1fr;
+    align-items: baseline;
+    gap: 16px;
+    padding: 10px 0;
+    font-size: calc(1rem + 6px);
+    cursor: default;
+    outline: none;
+
+    &:hover .sh-collapsed-name {
+      color: var(--sh-violet);
+    }
+  }
+
+  .sh-collapsed-name {
+    font-weight: 600;
     color: var(--sh-ink);
-  }
-
-  /* Subject first, big, like Superhuman's conversation title. */
-  #headerSubjectSecurityContainer {
-    order: -1;
-    margin-block-end: 10px;
-  }
-
-  #expandedsubjectBox {
-    font-size: 24px !important;
-    font-weight: 600 !important;
-    letter-spacing: -0.015em;
-    line-height: 1.25;
-    color: var(--sh-ink) !important;
-  }
-
-  #headerSenderToolbarContainer {
-    align-items: center;
-  }
-
-  #expandedfromRow,
-  #expandedfromBox {
-    font-size: 14px;
-    color: var(--sh-ink);
-  }
-
-  #expandedtoRow,
-  #expandedccRow,
-  #expandedtoLabel,
-  #expandedccLabel {
-    font-size: 12.5px;
-    color: var(--sh-ink-3) !important;
-  }
-
-  #dateLabel,
-  #dateLabelSubject {
-    font-size: 12.5px;
-    color: var(--sh-ink-3);
-  }
-
-  #expandedtagsRow {
-    margin-block-start: 2px;
-  }
-
-  #expandedtagsBox .tag {
-    border-radius: 4px;
-    border: none;
-    padding: 1px 7px 2px;
-    font-size: 12px;
-    font-weight: 500;
-  }
-
-  /* Same softened tint as the list chips. */
-  #expandedtagsBox .tag[style] {
-    color: #fff !important;
-    background-color: color-mix(in srgb, var(--tag-color) 48%, white) !important;
-  }
-
-  #expandedtagsBox .tag {
-    margin-inline-start: 0 !important;
-  }
-
-  /* Sender and the action buttons share one row, Superhuman-style. */
-  #headerSenderToolbarContainer {
-    flex-wrap: nowrap !important;
-    align-items: center;
-    gap: 12px;
-  }
-
-  #headerSenderToolbarContainer > #expandedfromRow {
-    flex: 1 1 auto;
-    min-inline-size: 0;
-  }
-
-  #expandedfromBox :is(.recipient-multi-line-name, .recipient-multi-line-address) {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
 
-  #expandedfromBox .recipient-multi-line-address {
-    font-size: 12.5px;
+  .sh-collapsed-snippet {
     color: var(--sh-ink-3);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
-  #header-view-toolbox {
-    flex: 0 0 auto;
-  }
+  .sh-fromline {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    margin-block: 22px 4px;
+    font-size: calc(1rem + 6px);
+    color: var(--sh-ink-3);
 
-  #header-view-toolbar :is(toolbarbutton, button, .toolbarbutton-1) {
-    padding: 6px !important;
-    min-inline-size: 30px;
-  }
-
-  .row-heading,
-  #toHeading,
-  #ccHeading {
-    color: var(--sh-ink-2) !important;
-  }
-
-  /* Round glass action buttons */
-  #header-view-toolbar {
-    gap: 6px;
-  }
-
-  #header-view-toolbar :is(toolbarbutton, button, .toolbarbutton-1) {
-    appearance: none !important;
-    border: none !important;
-    border-radius: 999px !important;
-    padding: 5px 12px !important;
-    font-family: var(--sh-font);
-    font-size: 12.5px;
-    color: var(--sh-ink-2) !important;
-    background: var(--sh-glass) !important;
-    box-shadow: inset 0 0 0 0.5px var(--sh-hair), inset 0 1px 0 var(--sh-glass-edge),
-      0 1px 2px rgba(0, 0, 0, 0.04) !important;
-    backdrop-filter: blur(20px) saturate(180%);
-
-    &:hover {
-      color: var(--sh-ink) !important;
+    &:first-child {
+      margin-block-start: 6px;
     }
   }
 
-  /* Read receipts: "Opened N times" card under the header (click to expand) */
+  .sh-fromline-arrow {
+    font-size: 18px;
+    color: var(--sh-ink-3);
+  }
+
+  .sh-fromline-who {
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .sh-fromline-when {
+    font-size: calc(1rem + 2px);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ---- Reply card ---- */
+  #superhumanReply {
+    box-sizing: border-box;
+    inline-size: min(100%, calc(var(--sh-col) + 2 * var(--sh-pad)));
+    margin: 0 auto;
+    padding: 4px calc(var(--sh-pad) - 22px) 32px;
+    font-family: var(--sh-font);
+    flex-shrink: 0;
+  }
+
+  .sh-reply-card {
+    padding: 16px 22px 12px;
+    border-radius: 18px;
+    border: 2px solid transparent;
+    background:
+      linear-gradient(var(--sh-surface), var(--sh-surface)) padding-box,
+      linear-gradient(135deg, #62abff, #90a6fa 50%, #bea1f5) border-box;
+  }
+
+  .sh-reply-label {
+    font-size: calc(1rem + 5px);
+    color: var(--sh-ink);
+    margin-block-end: 8px;
+  }
+
+  .sh-reply-kind {
+    background: var(--sh-grad);
+    background-clip: text;
+    color: transparent;
+  }
+
+  .sh-reply-text {
+    display: block;
+    box-sizing: border-box;
+    inline-size: 100%;
+    min-block-size: 76px;
+    resize: none;
+    border: none;
+    outline: none;
+    padding: 0;
+    background: transparent;
+    font: 400 17px/1.55 var(--sh-font);
+    color: var(--sh-ink);
+
+    &::placeholder {
+      color: var(--sh-ink-3);
+    }
+  }
+
+  .sh-reply-actions {
+    display: flex;
+    gap: 26px;
+    margin-block-start: 10px;
+  }
+
+  .sh-reply-action {
+    appearance: none;
+    border: none;
+    background: none;
+    padding: 4px 0;
+    min-inline-size: 0;
+    font: 400 16px var(--sh-font);
+    color: var(--sh-ink-3);
+    cursor: default;
+
+    &:hover,
+    &:focus-visible {
+      color: var(--sh-violet);
+      outline: none;
+    }
+  }
+
+  /* ---- Read receipts: "Opened N times" ---- */
   #superhumanSeen {
     box-sizing: border-box;
-    inline-size: min(calc(100% - 64px), var(--sh-col));
-    margin: 0 auto 12px;
-    padding: 10px 14px;
-    border-radius: 12px;
+    inline-size: min(calc(100% - 2 * var(--sh-pad)), var(--sh-col));
+    margin: 8px auto 0;
+    padding: 12px 16px;
+    border-radius: 16px;
     background: var(--sh-glass);
-    box-shadow: inset 0 0 0 0.5px var(--sh-hair), inset 0 1px 0 var(--sh-glass-edge);
+    backdrop-filter: blur(30px) saturate(180%);
+    box-shadow: inset 0 0 0 0.5px var(--sh-hair), inset 0 1px 0 var(--sh-glass-edge),
+      0 8px 24px light-dark(rgba(20, 20, 40, 0.08), rgba(0, 0, 0, 0.35));
     font-family: var(--sh-font);
     cursor: default;
 
     & .seen-title {
-      font-size: 13px;
-      font-weight: 600;
+      font-size: calc(1rem + 6px);
       color: var(--sh-ink-2);
     }
 
     &[data-state="opened"] .seen-title {
-      background: linear-gradient(90deg, #65abff, #b4a2f6);
+      background: var(--sh-grad);
       background-clip: text;
       color: transparent;
     }
@@ -191,20 +221,20 @@
     & .seen-list {
       display: none;
       list-style: none;
-      margin: 8px 0 0;
+      margin: 10px 0 2px;
       padding: 0;
     }
 
     &.open .seen-list {
       display: grid;
-      gap: 4px;
+      gap: 8px;
     }
 
     & li {
-      display: flex;
-      justify-content: space-between;
+      display: grid;
+      grid-template-columns: 1fr auto;
       gap: 16px;
-      font-size: 12.5px;
+      font-size: calc(1rem + 4px);
     }
 
     & .seen-where {
@@ -215,25 +245,5 @@
       color: var(--sh-ink-3);
       font-variant-numeric: tabular-nums;
     }
-  }
-
-  #messagepane,
-  #messagepanebox {
-    background: var(--sh-surface) !important;
-  }
-
-  /* The empty notification strip draws a hairline under the header. */
-  #mail-notification-top:not(:has(notification-message, .notificationbox-stack > *)) {
-    border-block-end: none !important;
-  }
-
-  #mail-notification-top {
-    border-block-end-color: transparent !important;
-  }
-
-
-  .main-header-area,
-  #messageHeader.message-header-large-subject {
-    border-block-end: none !important;
   }
 }

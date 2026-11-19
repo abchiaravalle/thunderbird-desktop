@@ -35,15 +35,35 @@ var superhuman = {
     return Services.prefs.getBoolPref(this.PREF, false);
   },
 
-  /** Split inbox definitions: label, and how to filter. */
+  /** Split inbox definitions: label, chip colour, and how to filter. */
   SPLITS: [
-    { id: "important", label: "Important", tags: { $label1: true } },
-    { id: "team", label: "Team", tags: { $label2: true } },
-    { id: "personal", label: "Personal", tags: { $label3: true } },
-    { id: "travel", label: "Travel", tags: { $label4: true } },
-    { id: "todo", label: "To Do", tags: { $label5: true } },
+    { id: "important", label: "Important", chip: "#e99bc3", tags: { $label1: true } },
+    { id: "team", label: "Team", chip: "#ec9e8d", tags: { $label2: true } },
+    { id: "personal", label: "Personal", chip: "#9cc88a", tags: { $label3: true } },
+    { id: "travel", label: "Travel", chip: "#7fb7bb", tags: { $label4: true } },
+    { id: "todo", label: "To Do", chip: "#a99ee8", tags: { $label5: true } },
     { id: "other", label: "Other", mode: "NONE" },
   ],
+
+  /**
+   * Chip for a tag key in the list: the split's own name and pastel colour
+   * when a split uses that tag, otherwise the tag's name. Returns null for
+   * the label of the split being viewed (Superhuman never repeats it).
+   */
+  chipFor(key) {
+    const split = this.SPLITS.find(s => s.tags && key in s.tags);
+    if (split) {
+      return split.id == this.activeSplit
+        ? null
+        : { text: split.label.toLowerCase(), color: split.chip };
+    }
+    try {
+      const tag = MailServices.tags.getAllTags().find(t => t.key == key);
+      return tag ? { text: tag.tag.toLowerCase(), color: tag.color || "#b0b0b5" } : null;
+    } catch {
+      return null;
+    }
+  },
 
   activeSplit: "important",
   reading: false,
@@ -412,9 +432,11 @@ var superhuman = {
       panel = doc.createElement("div");
       panel.id = "superhumanSeen";
       panel.addEventListener("click", () => panel.classList.toggle("open"));
-      const header = doc.getElementById("messageHeader");
-      header.parentNode.insertBefore(panel, header.nextSibling);
     }
+    const anchor =
+      doc.getElementById("superhumanThread") ??
+      doc.getElementById("singleMessage");
+    anchor.parentNode.insertBefore(panel, anchor.nextSibling);
     panel.dataset.rid = id;
     this._renderSeen(panel, SuperhumanReceipts.opensFor(id));
     SuperhumanReceipts.refresh([id]);
@@ -463,12 +485,50 @@ var superhuman = {
 
   /* --------------------------------------------------------------- reading */
 
+  /** Newest message of the conversation at a list index. */
+  _newestInThread(index) {
+    let best = null;
+    try {
+      const thread = gDBView.getThreadContainingIndex(index);
+      for (let i = 0; i < thread.numChildren; i++) {
+        const hdr = thread.getChildHdrAt(i);
+        if (hdr && (!best || hdr.date > best.date)) {
+          best = hdr;
+        }
+      }
+    } catch {}
+    return best;
+  },
+
   openReading() {
-    if (!gDBView || threadTree.selectedIndex < 0) {
+    if (!gDBView || threadTree.currentIndex < 0) {
       return;
     }
-    if (gDBView.numSelected != 1) {
-      threadTree._selectSingle(threadTree.currentIndex);
+    let index = threadTree.currentIndex;
+    // A conversation opens on its newest message; the earlier ones show as
+    // one line each above it (superhumanThread.js).
+    const messages = this._threadMessages(index);
+    if (messages.length > 1) {
+      const newest = messages.at(-1);
+      if (newest) {
+        const root = gDBView.findIndexOfMsgHdr(messages[0], false);
+        if (
+          root >= 0 &&
+          root != 0xffffffff &&
+          gDBView.isContainer(root) &&
+          !gDBView.isContainerOpen(root)
+        ) {
+          gDBView.toggleOpenState(root);
+          this._expandedRoot = gDBView.getMsgHdrAt(root);
+        }
+        const found = gDBView.findIndexOfMsgHdr(newest, true);
+        if (found != 0xffffffff && found >= 0) {
+          index = found;
+        }
+      }
+    }
+    if (gDBView.numSelected != 1 || threadTree.selectedIndex != index) {
+      threadTree._selectSingle(index);
     }
     this._picking = false;
     this.reading = true;
@@ -481,6 +541,16 @@ var superhuman = {
   closeReading() {
     this.reading = false;
     document.body.classList.remove("superhuman-reading");
+    if (this._expandedRoot && gDBView) {
+      try {
+        const root = gDBView.findIndexOfMsgHdr(this._expandedRoot, false);
+        if (root != 0xffffffff && root >= 0 && gDBView.isContainerOpen(root)) {
+          gDBView.toggleOpenState(root);
+          threadTree._selectSingle(root);
+        }
+      } catch {}
+      this._expandedRoot = null;
+    }
     this._focusList();
   },
 
@@ -504,15 +574,20 @@ var superhuman = {
     );
   },
 
+  /** /: search mail. Opens the palette in search mode; Enter filters the list. */
   focusSearch() {
-    const bar = top.document.querySelector(
-      "#unifiedToolbarContent .search-bar global-search-bar"
-    );
-    if (bar) {
-      bar.focus();
-    } else {
-      this.openPalette();
-    }
+    this.openPalette("", "search");
+  },
+
+  applySearch(text) {
+    text = text.trim();
+    quickFilterBar.filterer.setFilterValue("text", {
+      text: text || null,
+      states: { recipients: true, sender: true, subject: true, body: false },
+    });
+    quickFilterBar.updateSearch();
+    this.searchText = text;
+    this.toast(text ? `Search: ${text} (Esc clears)` : "Search cleared");
   },
 
   /** The displayed message's body document, when reading. */
@@ -578,6 +653,110 @@ var superhuman = {
       .loadURI(Services.io.newURI(url));
   },
 
+  /** Messages of the conversation at a list index, oldest first. */
+  _threadMessages(index) {
+    const out = [];
+    try {
+      const thread = gDBView.getThreadContainingIndex(index);
+      for (let i = 0; i < thread.numChildren; i++) {
+        const hdr = thread.getChildHdrAt(i);
+        if (hdr) {
+          out.push(hdr);
+        }
+      }
+    } catch {}
+    return out.sort((a, b) => a.date - b.date);
+  },
+
+  /** N / P: next or previous message inside the open conversation. */
+  stepMessage(delta) {
+    if (!this.reading) {
+      this.move(delta);
+      return;
+    }
+    const index = threadTree.currentIndex;
+    const current = gDBView.hdrForFirstSelectedMessage;
+    const messages = this._threadMessages(index);
+    const at = messages.findIndex(h => h.messageKey == current?.messageKey);
+    const next = messages[at + delta];
+    if (!next) {
+      this.toast(delta > 0 ? "Last message" : "First message");
+      return;
+    }
+    const found = gDBView.findIndexOfMsgHdr(next, true);
+    if (found >= 0 && found != 0xffffffff) {
+      threadTree._selectSingle(found);
+    }
+  },
+
+  /** Newest message of the conversation under the cursor, selected. */
+  _selectNewest() {
+    const index = threadTree.currentIndex;
+    if (index < 0 || !gDBView.isContainer(index)) {
+      return;
+    }
+    const newest = this._newestInThread(index);
+    if (!newest) {
+      return;
+    }
+    if (!gDBView.isContainerOpen(index)) {
+      gDBView.toggleOpenState(index);
+      this._expandedRoot = gDBView.getMsgHdrAt(index);
+    }
+    const found = gDBView.findIndexOfMsgHdr(newest, true);
+    if (found >= 0 && found != 0xffffffff) {
+      threadTree._selectSingle(found);
+    }
+  },
+
+  /** R / Enter: reply in the conversation, like Superhuman (inline box). */
+  reply(all) {
+    if (this.reading && this._inlineReply(all)) {
+      return;
+    }
+    if (!this.reading && Services.prefs.getBoolPref("mail.superhuman.inline-reply", true)) {
+      this.openReading();
+      // The conversation (and its reply box) is built once the message loads.
+      let tries = 0;
+      const wait = setInterval(() => {
+        if (this._inlineReply(all) || ++tries > 40) {
+          clearInterval(wait);
+        }
+      }, 100);
+      return;
+    }
+    commandController.doCommand(all ? "cmd_replyall" : "cmd_replySender");
+  },
+
+  /** ⌘= / ⌘- / ⌘0: the whole app's text size, list and messages alike. */
+  textSize(direction) {
+    const { UIFontSize } = ChromeUtils.importESModule(
+      "resource:///modules/UIFontSize.sys.mjs"
+    );
+    if (direction > 0) {
+      UIFontSize.increaseSize();
+    } else if (direction < 0) {
+      UIFontSize.reduceSize();
+    } else {
+      UIFontSize.resetSize();
+    }
+    this.toast(`Text size ${UIFontSize.size}`);
+  },
+
+  /** Focus Superhuman's inline reply box under the open message. */
+  _inlineReply(all = true) {
+    if (!Services.prefs.getBoolPref("mail.superhuman.inline-reply", true)) {
+      return false;
+    }
+    try {
+      return (
+        messageBrowser.contentWindow.superhumanThread?.focusReply(all) ?? false
+      );
+    } catch {
+      return false;
+    }
+  },
+
   /** Cmd+O: open the links and attachments of the open message. */
   openLinks() {
     if (!this.reading) {
@@ -619,9 +798,9 @@ var superhuman = {
       { id: "mute", label: "Mute conversation", key: "⇧M", run: () => this.mute() },
       { id: "unsubscribe", label: "Unsubscribe", key: "⌘U", run: () => this.unsubscribe() },
       { id: "compose", label: "Compose", key: "C", run: cmd("cmd_newMessage") },
-      { id: "reply", label: "Reply", key: "R", run: cmd("cmd_replySender") },
-      { id: "replyall", label: "Reply all", key: "↩ (in a message)", run: cmd("cmd_replyall") },
-      { id: "forward", label: "Forward", key: "F", run: cmd("cmd_forwardInline") },
+      { id: "reply", label: "Reply", key: "R", run: () => this.reply(false) },
+      { id: "replyall", label: "Reply all", key: "↩", run: () => this.reply(true) },
+      { id: "forward", label: "Forward", key: "F", run: () => { this._selectNewest(); commandController.doCommand("cmd_forwardInline"); } },
       { id: "label", label: "Add label", key: "L", run: () => this.openPalette("label:") },
       { id: "removelabel", label: "Remove this split's label", key: "Y", run: () => this.removeSplitLabel(0) },
       { id: "removelabelnext", label: "Remove label, then next", key: "[", run: () => this.removeSplitLabel(1) },
@@ -636,8 +815,8 @@ var superhuman = {
       { id: "selectall", label: "Select all", key: "⌘⇧A", run: () => threadTree.selectAll() },
       { id: "next", label: "Next conversation", key: "J", run: () => this.move(1) },
       { id: "prev", label: "Previous conversation", key: "K", run: () => this.move(-1) },
-      { id: "nextmsg", label: "Next message", key: "N", run: cmd("cmd_nextMsg") },
-      { id: "prevmsg", label: "Previous message", key: "P", run: cmd("cmd_previousMsg") },
+      { id: "nextmsg", label: "Next message in conversation", key: "N", run: () => this.stepMessage(1) },
+      { id: "prevmsg", label: "Previous message in conversation", key: "P", run: () => this.stepMessage(-1) },
       { id: "open", label: "Open conversation", key: "↩", run: () => this.openReading() },
       { id: "back", label: "Back to list", key: "Esc", run: () => this.closeReading() },
       { id: "expand", label: "Expand / collapse conversation", key: "O", run: () => this.toggleThread() },
@@ -658,9 +837,9 @@ var superhuman = {
       { id: "prevsplit", label: "Previous split", key: "⇧Tab", run: () => this.cycleSplit(-1) },
       { id: "folders", label: "Show / hide folders", key: "←", run: () => this.toggleFolders() },
       { id: "newwindow", label: "New window", key: "⌘N", run: () => this.newWindow() },
-      { id: "bigger", label: "Bigger text", key: "⌘=", run: cmd("cmd_fullZoomEnlarge") },
-      { id: "smaller", label: "Smaller text", key: "⌘-", run: cmd("cmd_fullZoomReduce") },
-      { id: "resettext", label: "Reset text size", key: "⌘0", run: cmd("cmd_fullZoomReset") },
+      { id: "bigger", label: "Bigger text", key: "⌘=", run: () => this.textSize(1) },
+      { id: "smaller", label: "Smaller text", key: "⌘-", run: () => this.textSize(-1) },
+      { id: "resettext", label: "Reset text size", key: "⌘0", run: () => this.textSize(0) },
       { id: "copylink", label: "Copy message link", key: "⌃/", run: () => this.copyLink() },
       { id: "settings", label: "Settings", key: "⌘,", run: () => top.openPreferencesTab() },
       { id: "receipts", label: "Refresh read receipts", key: "", run: () => this.refreshReceipts(true) },
@@ -841,9 +1020,14 @@ var superhuman = {
   selectFromHere() {
     const max = gDBView ? gDBView.rowCount - 1 : -1;
     const cur = Math.max(0, threadTree.currentIndex);
-    if (max >= 0) {
-      threadTree._selectRange(cur, max);
+    if (max < 0) {
+      return;
     }
+    this._picking = true;
+    for (let i = cur; i <= max; i++) {
+      threadTree.toggleSelectionAtIndex(i, true, i < max);
+    }
+    threadTree.currentIndex = cur;
   },
 
   clearSelection() {
@@ -1152,6 +1336,17 @@ var superhuman = {
   },
 
   _paletteItems(query) {
+    if (this._paletteMode == "search") {
+      const q = query.trim();
+      return [
+        {
+          id: "search-run",
+          label: q ? `Search mail for “${q}”` : "Type to search sender, recipients and subject",
+          key: "↩",
+          run: () => q && this.applySearch(q),
+        },
+      ];
+    }
     const tagItems = (q, run) =>
       MailServices.tags
         .getAllTags()
@@ -1201,13 +1396,7 @@ var superhuman = {
         id: "search-text",
         label: `Search mail for “${query.trim()}”`,
         key: "↩",
-        run: () => {
-          quickFilterBar.filterer.setFilterValue("text", {
-            text: query.trim(),
-            states: { recipients: true, sender: true, subject: true, body: false },
-          });
-          quickFilterBar.updateSearch();
-        },
+        run: () => this.applySearch(query),
       });
     }
     return items;
@@ -1274,7 +1463,10 @@ var superhuman = {
     e.stopPropagation();
   },
 
-  openPalette(prefill = "") {
+  openPalette(prefill = "", mode = "commands") {
+    this._paletteMode = mode;
+    this._paletteInput.placeholder =
+      mode == "search" ? "Search mail…" : "Type a command or search…";
     this._palette.hidden = false;
     this._palette.classList.add("open");
     this._paletteInput.value = prefill;
@@ -1401,10 +1593,10 @@ var superhuman = {
         ",": () => top.openPreferencesTab(),
         ArrowUp: () => this.jump(false),
         ArrowDown: () => this.jump(true),
-        "=": () => commandController.doCommand("cmd_fullZoomEnlarge"),
-        "+": () => commandController.doCommand("cmd_fullZoomEnlarge"),
-        "-": () => commandController.doCommand("cmd_fullZoomReduce"),
-        0: () => commandController.doCommand("cmd_fullZoomReset"),
+        "=": () => this.textSize(1),
+        "+": () => this.textSize(1),
+        "-": () => this.textSize(-1),
+        0: () => this.textSize(0),
       };
       const fn = map[lower] ?? map[key];
       if (fn) {
@@ -1483,20 +1675,24 @@ var superhuman = {
         this.move(-1);
         return true;
       case "n":
-        commandController.doCommand("cmd_nextMsg");
+        this.stepMessage(1);
         return true;
       case "p":
-        commandController.doCommand("cmd_previousMsg");
+        this.stepMessage(-1);
         return true;
       case "Enter":
         if (!this.reading) {
           this.openReading();
         } else {
-          commandController.doCommand("cmd_replyall");
+          this.reply(true);
         }
         return true;
       case "Escape":
         if (this.clearSelection()) {
+          return true;
+        }
+        if (this.searchText && !this.reading) {
+          this.applySearch("");
           return true;
         }
         if (this.reading) {
@@ -1529,9 +1725,10 @@ var superhuman = {
         this.toggleRead();
         return true;
       case "r":
-        commandController.doCommand("cmd_replySender");
+        this.reply(false);
         return true;
       case "f":
+        this._selectNewest();
         commandController.doCommand("cmd_forwardInline");
         return true;
       case "c":

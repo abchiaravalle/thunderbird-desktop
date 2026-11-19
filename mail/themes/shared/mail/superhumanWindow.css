@@ -3,9 +3,11 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 /* ===== superhumanWindow.css ===========================================
-   Window chrome for the Superhuman look: a Liquid Glass window (the native
-   -moz-sidebar material, which macOS 26+ draws as NSGlassEffectView when
-   widget.macos.sidebar-glass is on), a slim toolbar and no spaces strip.
+   Window chrome for the Superhuman look. The window is Liquid Glass (the
+   -moz-sidebar material, drawn with NSGlassEffectView on macOS 26+ when
+   widget.macos.sidebar-glass is on). Thunderbird's toolbar, search field,
+   app menu, spaces rail and status bar are removed; the mail tab sits on
+   the glass as one white rounded card, like Superhuman's window.
    Only active when mail.superhuman.enabled is true.
    ====================================================================== */
 
@@ -15,15 +17,26 @@
 @media -moz-pref("mail.superhuman.enabled") {
   :root:not([lwtheme]) {
     --sh-font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
-    --sh-ink-2: light-dark(#6e6e73, #a1a1a6);
-    --sh-hair: light-dark(rgba(0, 0, 0, 0.06), rgba(255, 255, 255, 0.08));
-    --sh-glass: light-dark(rgba(255, 255, 255, 0.55), rgba(44, 44, 46, 0.5));
-    --sh-glass-edge: light-dark(rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0.14));
+    --sh-card: light-dark(#ffffff, #1c1c1e);
     font-family: var(--sh-font);
   }
 
-  /* The whole window body sits on glass; content panes paint their own
-   * calm surfaces on top (Apple's rule: glass for the floating layer). */
+  /* Glass under everything: titlebar strip and body share one material. */
+  :root:not([lwtheme]) #navigation-toolbox {
+    background: transparent !important;
+    box-shadow: none !important;
+    border: none !important;
+
+    &::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      z-index: -1;
+      appearance: auto;
+      -moz-default-appearance: -moz-sidebar !important;
+    }
+  }
+
   :root:not([lwtheme]) #messengerBody {
     position: relative;
     background: transparent;
@@ -38,14 +51,27 @@
     }
   }
 
-  :root:not([lwtheme]) :is(#tabmail-container, #tabmail, #tabmail-tabbox, #tabpanelcontainer) {
-    background: transparent;
+  /* The titlebar strip keeps only the window buttons and a drag area. */
+  unified-toolbar {
+    border: none !important;
+    background: transparent !important;
   }
 
-  /* Superhuman has no app-switcher rail. */
+  #unifiedToolbarContainer {
+    min-block-size: 36px;
+  }
+
+  #unifiedToolbarContent,
+  #notification-popup-box,
+  #button-appmenu,
   #spacesToolbar,
-  #spacesToolbarReveal {
+  #spacesToolbarReveal,
+  #status-bar {
     display: none !important;
+  }
+
+  #unifiedToolbar {
+    -moz-window-dragging: drag;
   }
 
   #spacesToolbar ~ #messengerBody,
@@ -57,33 +83,31 @@
     inline-size: 100vw !important;
   }
 
-  /* Slim, quiet toolbar on glass. */
-  :root:not([lwtheme]) #navigation-toolbox {
-    box-shadow: none;
-    border-block-end: 1px solid var(--sh-hair);
+  /* The white card, inset on the glass. */
+  :root:not([lwtheme]) :is(#tabmail, #tabmail-tabbox, #tabpanelcontainer) {
+    background: transparent;
   }
 
-  unified-toolbar {
-    --unified-toolbar-button-background: transparent;
+  :root:not([lwtheme]) #tabmail-container {
+    margin: 0 10px 10px;
+    border-radius: 14px;
+    overflow: clip;
+    background: var(--sh-card);
+    box-shadow:
+      0 0 0 0.5px light-dark(rgba(0, 0, 0, 0.08), rgba(255, 255, 255, 0.08)),
+      0 10px 30px light-dark(rgba(20, 20, 40, 0.10), rgba(0, 0, 0, 0.45)),
+      0 1px 3px light-dark(rgba(20, 20, 40, 0.06), rgba(0, 0, 0, 0.3));
   }
 
-  #unifiedToolbarContent .unified-toolbar-button {
-    border-radius: 999px;
-  }
-
-  #unifiedToolbarContent global-search-bar {
-    --search-bar-border-color: transparent;
-    --search-bar-background: var(--sh-glass);
-    --search-field-border-radius: 999px;
-  }
-
-  /* Status bar off; Superhuman shows a toast instead. */
-  #status-bar {
-    display: none !important;
-  }
-
-  /* Tabs only when there is more than one (mail.tabs.autoHide). */
   #tabs-toolbar .tabmail-tab {
     border-radius: 10px;
+  }
+
+  @media (prefers-reduced-transparency: reduce) {
+    :root:not([lwtheme]) #messengerBody::before,
+    :root:not([lwtheme]) #navigation-toolbox::after {
+      appearance: none;
+      background: light-dark(#ececef, #2a2a2c);
+    }
   }
 }
