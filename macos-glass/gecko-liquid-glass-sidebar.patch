@@ -1,0 +1,136 @@
+diff --git a/modules/libpref/init/StaticPrefList.yaml b/modules/libpref/init/StaticPrefList.yaml
+index 84b1c5ac5a..b9702ca112 100644
+--- a/modules/libpref/init/StaticPrefList.yaml
++++ b/modules/libpref/init/StaticPrefList.yaml
+@@ -21384,6 +21384,26 @@
+   value: false
+   mirror: always
+ 
++# On macOS 26+, draw -moz-sidebar regions with Liquid Glass
++# (NSGlassEffectView) instead of the sidebar vibrancy material. Read when the
++# region's views are created, so toggling it needs a window reopen.
++- name: widget.macos.sidebar-glass
++  type: RelaxedAtomicBool
++  value: false
++  mirror: always
++
++# Corner radius, in points, of the Liquid Glass sidebar panels.
++- name: widget.macos.sidebar-glass-corner-radius
++  type: RelaxedAtomicUint32
++  value: 16
++  mirror: always
++
++# Use the "clear" Liquid Glass variant instead of "regular".
++- name: widget.macos.sidebar-glass-clear
++  type: RelaxedAtomicBool
++  value: false
++  mirror: always
++
+ - name: widget.macos.window-transforms.disabled
+   type: RelaxedAtomicBool
+   value: false
+diff --git a/widget/cocoa/VibrancyManager.mm b/widget/cocoa/VibrancyManager.mm
+index 8809e2be6c..fe4181eb0c 100644
+--- a/widget/cocoa/VibrancyManager.mm
++++ b/widget/cocoa/VibrancyManager.mm
+@@ -21,6 +21,13 @@ - (instancetype)initWithFrame:(NSRect)aRect
+ - (void)prefChanged;
+ @end
+ 
++// Hosts a Liquid Glass (NSGlassEffectView, macOS 26+) panel for vibrant
++// sidebar regions when widget.macos.sidebar-glass is enabled. The host is
++// transparent to mouse events, so the whole subtree is skipped by hitTest.
++@interface MOZGlassHostView : NSView
++- (void)prefChanged;
++@end
++
+ static NSVisualEffectState VisualEffectStateForVibrancyType(
+     VibrancyType aType) {
+   switch (aType) {
+@@ -78,6 +85,51 @@ - (void)prefChanged {
+ }
+ @end
+ 
++@implementation MOZGlassHostView
++- (instancetype)initWithFrame:(NSRect)aRect {
++  self = [super initWithFrame:aRect];
++  if (@available(macOS 26.0, *)) {
++    auto* glass = [[NSGlassEffectView alloc] initWithFrame:self.bounds];
++    glass.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
++    [self addSubview:glass];
++    [glass release];
++    [self prefChanged];
++  }
++  return self;
++}
++
++- (NSView*)hitTest:(NSPoint)aPoint {
++  // Like MOZVibrantView, this view must be transparent to mouse events.
++  return nil;
++}
++
++- (void)prefChanged {
++  if (@available(macOS 26.0, *)) {
++    for (NSView* sub in self.subviews) {
++      if ([sub isKindOfClass:[NSGlassEffectView class]]) {
++        auto* glass = static_cast<NSGlassEffectView*>(sub);
++        glass.cornerRadius =
++            StaticPrefs::widget_macos_sidebar_glass_corner_radius();
++        glass.style = StaticPrefs::widget_macos_sidebar_glass_clear()
++                          ? NSGlassEffectViewStyleClear
++                          : NSGlassEffectViewStyleRegular;
++      }
++    }
++  }
++}
++@end
++
++static bool UseGlassForVibrancyType(VibrancyType aType) {
++  if (aType != VibrancyType::Sidebar ||
++      !StaticPrefs::widget_macos_sidebar_glass()) {
++    return false;
++  }
++  if (@available(macOS 26.0, *)) {
++    return true;
++  }
++  return false;
++}
++
+ static void PrefChanged(const char* aPref, void* aClosure) {
+   static_cast<VibrancyManager*>(aClosure)->PrefChanged();
+ }
+@@ -85,6 +137,8 @@ static void PrefChanged(const char* aPref, void* aClosure) {
+ static constexpr nsLiteralCString kObservedPrefs[] = {
+     "widget.macos.sidebar-blend-mode.behind-window"_ns,
+     "widget.macos.titlebar-blend-mode.behind-window"_ns,
++    "widget.macos.sidebar-glass-corner-radius"_ns,
++    "widget.macos.sidebar-glass-clear"_ns,
+ };
+ 
+ VibrancyManager::VibrancyManager(const nsCocoaWindow& aCoordinateConverter,
+@@ -108,7 +162,11 @@ static void PrefChanged(const char* aPref, void* aClosure) {
+       continue;
+     }
+     for (NSView* view : region->Views()) {
+-      [static_cast<MOZVibrantView*>(view) prefChanged];
++      if ([view isKindOfClass:[MOZGlassHostView class]]) {
++        [static_cast<MOZGlassHostView*>(view) prefChanged];
++      } else {
++        [static_cast<MOZVibrantView*>(view) prefChanged];
++      }
+     }
+   }
+ }
+@@ -125,6 +183,11 @@ static void PrefChanged(const char* aPref, void* aClosure) {
+     slot = std::make_unique<ViewRegion>();
+   }
+   return slot->UpdateRegion(aRegion, mCoordinateConverter, mContainerView, ^() {
+-    return [[MOZVibrantView alloc] initWithFrame:NSZeroRect vibrancyType:aType];
++    if (UseGlassForVibrancyType(aType)) {
++      return static_cast<NSView*>(
++          [[MOZGlassHostView alloc] initWithFrame:NSZeroRect]);
++    }
++    return static_cast<NSView*>(
++        [[MOZVibrantView alloc] initWithFrame:NSZeroRect vibrancyType:aType]);
+   });
+ }
