@@ -15,7 +15,7 @@
   --sh-accent-soft: light-dark(rgba(107, 98, 240, 0.08), rgba(141, 134, 255, 0.16));
   --sh-ink: light-dark(#1c1c1e, #f2f2f7);
   --sh-ink-2: light-dark(#6e6e73, #a1a1a6);
-  --sh-ink-3: light-dark(#8e8e93, #8e8e93);
+  --sh-ink-3: light-dark(#737378, #98989d);
   --sh-hair: light-dark(rgba(0, 0, 0, 0.06), rgba(255, 255, 255, 0.08));
   --sh-surface: light-dark(#ffffff, #1c1c1e);
   --sh-row-hover: light-dark(rgba(0, 0, 0, 0.025), rgba(255, 255, 255, 0.04));

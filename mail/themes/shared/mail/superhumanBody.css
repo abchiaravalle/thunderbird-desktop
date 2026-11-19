@@ -34,6 +34,6 @@
 
   .moz-txt-sig,
   .moz-signature {
-    color: #8e8e93 !important;
+    color: light-dark(#737378, #98989d) !important;
   }
 }

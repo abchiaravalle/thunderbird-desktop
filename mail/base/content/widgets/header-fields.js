@@ -499,8 +499,16 @@
       // Show only the display name if we have a valid card and the user wants
       // to show a condensed header (without the full email address) for saved
       // contacts.
+      const superhumanName =
+        this.dataset.headerName == "from" &&
+        Services.prefs.getBoolPref("mail.superhuman.enabled", false) &&
+        (displayName || this.displayName);
       if (showCondensedAddress && displayName) {
         this.email.textContent = displayName;
+        this.email.setAttribute("title", this.fullAddress);
+      } else if (superhumanName) {
+        // Superhuman look: the sender's name; the address shows on hover.
+        this.email.textContent = superhumanName;
         this.email.setAttribute("title", this.fullAddress);
       } else {
         this.email.textContent = this.fullAddress;
@@ -1175,7 +1183,7 @@
             : "black";
           li.setAttribute(
             "style",
-            `color: ${textColor}; background-color: ${color};`
+            `color: ${textColor}; background-color: ${color}; --tag-color: ${color};`
           );
         }
 

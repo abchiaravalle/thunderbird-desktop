@@ -14,7 +14,7 @@
     --sh-accent: light-dark(#6b62f0, #8d86ff);
     --sh-ink: light-dark(#1c1c1e, #f2f2f7);
     --sh-ink-2: light-dark(#6e6e73, #a1a1a6);
-    --sh-ink-3: #8e8e93;
+    --sh-ink-3: light-dark(#737378, #98989d);
     --sh-hair: light-dark(rgba(0, 0, 0, 0.06), rgba(255, 255, 255, 0.08));
     --sh-surface: light-dark(#ffffff, #1c1c1e);
     --sh-glass: light-dark(rgba(255, 255, 255, 0.62), rgba(44, 44, 46, 0.58));
@@ -93,10 +93,52 @@
     font-weight: 500;
   }
 
-  /* Soften the saturated tag colors to match the list chips. */
+  /* Same softened tint as the list chips. */
   #expandedtagsBox .tag[style] {
     color: #fff !important;
-    filter: saturate(0.75) brightness(1.12);
+    background-color: color-mix(in srgb, var(--tag-color) 48%, white) !important;
+  }
+
+  #expandedtagsBox .tag {
+    margin-inline-start: 0 !important;
+  }
+
+  /* Sender and the action buttons share one row, Superhuman-style. */
+  #headerSenderToolbarContainer {
+    flex-wrap: nowrap !important;
+    align-items: center;
+    gap: 12px;
+  }
+
+  #headerSenderToolbarContainer > #expandedfromRow {
+    flex: 1 1 auto;
+    min-inline-size: 0;
+  }
+
+  #expandedfromBox :is(.recipient-multi-line-name, .recipient-multi-line-address) {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  #expandedfromBox .recipient-multi-line-address {
+    font-size: 12.5px;
+    color: var(--sh-ink-3);
+  }
+
+  #header-view-toolbox {
+    flex: 0 0 auto;
+  }
+
+  #header-view-toolbar :is(toolbarbutton, button, .toolbarbutton-1) {
+    padding: 6px !important;
+    min-inline-size: 30px;
+  }
+
+  .row-heading,
+  #toHeading,
+  #ccHeading {
+    color: var(--sh-ink-2) !important;
   }
 
   /* Round glass action buttons */
