@@ -32,5 +32,13 @@ Liquid Glass drawing back to the old vibrancy.
 
 ## Building
 
+The app is "Thunderbird Glass" (bundle id `studio.amplifi.thunderbird-glass`, profile folder
+`~/Library/Thunderbird Glass`), so it never shares data with an installed Thunderbird. Updater and
+crash reporter are off in this build.
+
+Sign + notarize: `macos-glass/sign_notarize.sh <obj>/dist/thunderbird-*.mac.tar` (Developer ID via
+Xcode cloud signing, Mozilla's hardened-runtime entitlements, notarytool, staple).
+
+
 `./macos-glass/build.sh` fetches the Firefox engine revision in `GECKO_REV`,
 applies `gecko-liquid-glass-sidebar.patch` and runs a full build.

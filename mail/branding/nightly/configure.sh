@@ -2,5 +2,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-MOZ_APP_DISPLAYNAME="Thunderbird Daily"
-MOZ_MACBUNDLE_ID="thunderbird-daily"
+# Superhuman-style macOS fork: its own app name, bundle id and profile folder,
+# so it never shares data with an installed Thunderbird.
+MOZ_APP_DISPLAYNAME="Thunderbird Glass"
+MOZ_MACBUNDLE_ID="thunderbird-glass"

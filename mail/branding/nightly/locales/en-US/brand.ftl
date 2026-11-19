@@ -11,9 +11,9 @@
 ##
 ## Reference: https://www.mozilla.org/styleguide/communications/translation/
 
--brand-shorter-name = Daily
--brand-short-name = Daily
--brand-full-name = Thunderbird Daily
+-brand-shorter-name = Glass
+-brand-short-name = Glass
+-brand-full-name = Thunderbird Glass
 # This brand name can be used in messages where the product name needs to
 # remain unchanged across different versions (Daily, Beta, etc.).
 -brand-product-name = Thunderbird

@@ -257,7 +257,7 @@ imply_option("MOZ_APP_BASENAME", "Thunderbird", when=~thunderbird_enterprise)
 
 # MOZ_APP_PROFILE: When set, used for application.ini's
 # "Profile" field, which controls profile location.
-imply_option("MOZ_APP_PROFILE", "Thunderbird", when=(target_is_windows | target_is_osx) & ~thunderbird_enterprise)
+imply_option("MOZ_APP_PROFILE", "Thunderbird Glass", when=(target_is_windows | target_is_osx) & ~thunderbird_enterprise)
 imply_option("MOZ_APP_PROFILE", "thunderbird", when=~target_is_windows & ~target_is_osx & ~thunderbird_enterprise)
 
 imply_option("MOZ_APP_PROFILE", "ThunderbirdEnterprise", when=(target_is_windows | target_is_osx) & thunderbird_enterprise)
