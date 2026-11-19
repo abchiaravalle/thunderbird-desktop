@@ -1,0 +1,138 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+/* ===== superhumanCompose.css ==========================================
+   Superhuman-style compose window: a quiet white card with To / Subject
+   as simple underlined lines, a borderless body, and a single accent Send.
+   Only active when mail.superhuman.enabled is true.
+   ====================================================================== */
+
+@namespace html url("http://www.w3.org/1999/xhtml");
+
+/* stylelint-disable-next-line media-query-no-invalid */
+@media -moz-pref("mail.superhuman.enabled") {
+  :root {
+    --sh-accent: light-dark(#6b62f0, #8d86ff);
+    --sh-ink: light-dark(#1c1c1e, #f2f2f7);
+    --sh-ink-2: light-dark(#6e6e73, #a1a1a6);
+    --sh-ink-3: #8e8e93;
+    --sh-hair: light-dark(rgba(0, 0, 0, 0.07), rgba(255, 255, 255, 0.09));
+    --sh-surface: light-dark(#ffffff, #1c1c1e);
+    --sh-glass: light-dark(rgba(255, 255, 255, 0.62), rgba(44, 44, 46, 0.58));
+    --sh-glass-edge: light-dark(rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0.14));
+    --sh-font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+    font-family: var(--sh-font);
+  }
+
+  #composeContentBox,
+  #MsgHeadersToolbar,
+  #headers-box,
+  #messageEditor {
+    background: var(--sh-surface) !important;
+  }
+
+  #MsgHeadersToolbar {
+    padding: 14px 28px 6px !important;
+    border: none !important;
+    box-shadow: none !important;
+  }
+
+  /* Address rows + subject: plain lines, no boxes */
+  #recipientsContainer .address-row,
+  #msgSubjectContainer {
+    border-block-end: 1px solid var(--sh-hair);
+    padding-block: 6px !important;
+  }
+
+  #recipientsContainer .address-label-container label,
+  #msgSubjectContainer label {
+    font-size: 13px;
+    color: var(--sh-ink-3) !important;
+  }
+
+  .address-container,
+  #msgSubject {
+    appearance: none !important;
+    border: none !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    font-family: var(--sh-font) !important;
+    font-size: 14px !important;
+    color: var(--sh-ink) !important;
+    outline: none !important;
+  }
+
+  #msgSubject {
+    font-size: 16px !important;
+    font-weight: 600;
+  }
+
+  .address-pill {
+    border-radius: 999px !important;
+    padding-inline: 8px !important;
+  }
+
+  /* Formatting bar: hidden until hovered, like Superhuman's minimal editor */
+  #FormatToolbar,
+  #FormatToolbox,
+  #FormatToolbar > * {
+    border: none !important;
+    background: transparent !important;
+  }
+
+  #FormatToolbar {
+    opacity: 0.35;
+    transition: opacity 160ms ease;
+    padding-inline: 22px !important;
+    border-block-end: 1px solid var(--sh-hair) !important;
+
+    &:hover,
+    &:focus-within {
+      opacity: 1;
+    }
+  }
+
+  #messageEditor {
+    margin-inline: 22px;
+  }
+
+  /* Toolbar: glass, one accent Send pill */
+  #composeToolbar2 {
+    background: transparent !important;
+    border: none !important;
+    /* Keep the platform's top padding: the toolbar sits under the titlebar. */
+    padding-inline: 16px !important;
+    padding-block-end: 8px !important;
+  }
+
+  #composeToolbar2 toolbarbutton:not(#button-send) {
+    appearance: none !important;
+    border-radius: 999px !important;
+    color: var(--sh-ink-2) !important;
+  }
+
+  #button-send {
+    appearance: none !important;
+    border: none !important;
+    border-radius: 999px !important;
+    padding: 6px 16px !important;
+    color: #fff !important;
+    background: var(--sh-accent) !important;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.25) !important;
+    font-weight: 600;
+
+    & .toolbarbutton-icon {
+      fill: #fff !important;
+    }
+  }
+
+  #compose-toolbox {
+    border-block-end: 1px solid var(--sh-hair) !important;
+  }
+
+  #compose-notification-bottom,
+  #status-bar {
+    border: none !important;
+  }
+}

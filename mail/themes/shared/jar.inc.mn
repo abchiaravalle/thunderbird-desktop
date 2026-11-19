@@ -126,6 +126,7 @@
   skin/classic/messenger/superhumanWindow.css                 (../shared/mail/superhumanWindow.css)
   skin/classic/messenger/superhumanMessage.css                (../shared/mail/superhumanMessage.css)
   skin/classic/messenger/superhumanBody.css                   (../shared/mail/superhumanBody.css)
+  skin/classic/messenger/superhumanCompose.css                (../shared/mail/superhumanCompose.css)
   skin/classic/messenger/aboutExtra.css                       (../shared/mail/aboutExtra.css)
   skin/classic/messenger/aboutAddressBook.css                 (../shared/mail/aboutAddressBook.css)
   skin/classic/messenger/aboutImport.css                      (../shared/mail/aboutImport.css)
