@@ -372,6 +372,43 @@ body.superhuman #threadTree {
       color: #f5a524;
     }
 
+    /* Read receipts column (sent mail): "Seen N" or a quiet check */
+    & .superhuman-receipt {
+      order: 4;
+      flex: 0 0 auto;
+      min-inline-size: 64px;
+      margin-inline-start: 12px;
+      text-align: end;
+      font-size: 12px;
+      font-weight: 500;
+      white-space: nowrap;
+      font-variant-numeric: tabular-nums;
+
+      &[hidden] {
+        display: none;
+      }
+
+      &[data-state="opened"] {
+        color: var(--sh-accent);
+
+        &::before {
+          content: "✓✓ ";
+          letter-spacing: -0.2em;
+          margin-inline-end: 4px;
+        }
+      }
+
+      &[data-state="unopened"]::before,
+      &[data-state="pending"]::before {
+        content: "✓";
+        color: var(--sh-ink-3);
+      }
+
+      &[data-state="pending"] {
+        opacity: 0.5;
+      }
+    }
+
     & .date {
       order: 5;
       flex: 0 0 auto;

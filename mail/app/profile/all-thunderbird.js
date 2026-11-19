@@ -1636,6 +1636,11 @@ pref("mail.threadpane.cardsview.rowcount", 3);
 pref("mail.superhuman.enabled", true);
 // Superhuman has no folder sidebar; the menu button shows it (remembered).
 pref("mail.superhuman.folders-visible", false);
+// Read receipts: a 1x1 image from this host is added to sent HTML mail and
+// the opens show in the list and on the message. The token is per user.
+pref("mail.superhuman.receipts.enabled", true);
+pref("mail.superhuman.receipts.host", "r.amplifi.studio");
+pref("mail.superhuman.receipts.token", "");
 #ifdef XP_MACOSX
 // Draw sidebar-material regions with Liquid Glass on macOS 26+.
 pref("widget.macos.sidebar-glass", true);

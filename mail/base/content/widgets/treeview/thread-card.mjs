@@ -47,6 +47,7 @@ class ThreadCard extends TreeViewTableRow {
     this.statusIndicator = this.querySelector(".read-status");
     this.chips = this.querySelector(".superhuman-chips");
     this.previewLine = this.querySelector(".superhuman-preview");
+    this.receiptLine = this.querySelector(".superhuman-receipt");
   }
 
   /**
@@ -62,8 +63,25 @@ class ThreadCard extends TreeViewTableRow {
     }
     this.chips.replaceChildren();
     this.previewLine.textContent = "";
+    this.receiptLine.hidden = true;
+    this.receiptLine.removeAttribute("data-state");
+    this.receiptLine.textContent = "";
     if (isDummy) {
       return;
+    }
+    const receipt = window.superhuman.receiptFor(this._index);
+    if (receipt) {
+      const count = receipt.opens?.length;
+      this.receiptLine.hidden = false;
+      this.receiptLine.dataset.state =
+        count == null ? "pending" : count ? "opened" : "unopened";
+      this.receiptLine.textContent = count ? `Seen ${count}` : "";
+      this.receiptLine.title =
+        count == null
+          ? "Read receipt: checking"
+          : count
+            ? `Opened ${count} time${count == 1 ? "" : "s"}`
+            : "Not opened yet";
     }
     for (const key of (tagKeys || "").split(" ").filter(Boolean)) {
       const tag = ThreadCard.#tagInfo(key);

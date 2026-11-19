@@ -426,7 +426,8 @@ pref("mailnews.ldap.loglevel", "Warn");
 pref("mailnews.confirm.moveFoldersToTrash", true);
 
 // space-delimited list of extra headers to add to .msf file
-pref("mailnews.customDBHeaders", "");
+// x-superhuman-receipt: read-receipt id, shown in the Superhuman-style list.
+pref("mailnews.customDBHeaders", "x-superhuman-receipt");
 
 // close standalone message window when deleting the displayed message
 pref("mail.close_message_window.on_delete", false);
@@ -455,7 +456,8 @@ pref("mail.identity.default.autocompleteToMyDomain", false);
 
 pref("mail.identity.default.archive_enabled", true);
 // archive into 0: single folder, 1: yearly folder, 2: year/year-month folder
-pref("mail.identity.default.archive_granularity", 1);
+// 0 = one Archive ("Done") folder, Superhuman style. Stock default is 1 (yearly).
+pref("mail.identity.default.archive_granularity", 0);
 pref("mail.identity.default.archive_keep_folder_structure", false);
 pref("mail.identity.default.archive_recreate_inbox", false);
 

@@ -9,21 +9,28 @@
  * false the 3-pane behaves exactly like stock Thunderbird.
  *
  * - Split inbox tabs above the message list (tag-based, with unread counts).
- * - Single-line rows: sender column, label chips, subject + grey preview, time.
+ * - Single-line rows: sender column, label chips, subject + grey preview,
+ *   read-receipt column, time.
  * - Full-width reading: Enter opens the selected conversation in place of the
- *   list, Escape goes back.
- * - Superhuman's keyboard map (E, J/K, #, !, S, U, C, R, F, Z, /, H, G+key).
- * - Command palette on Cmd+K (or Ctrl+K) listing every action and its key.
+ *   list, Escape goes back. Sent mail with a receipt shows "Opened N times".
+ * - Superhuman's keyboard map, including G-then jumps and selection keys.
+ * - Command palette on Cmd+K listing every action and its key.
  */
 
-/* globals gFolder, gDBView, gViewWrapper, threadTree, threadPane, paneLayout,
+/* globals gFolder, gDBView, gViewWrapper, threadTree, paneLayout,
    quickFilterBar, commandController, displayFolder, goDoCommand,
-   MailServices */
+   MailServices, messageBrowser */
 
 "use strict";
 
+ChromeUtils.defineESModuleGetters(this, {
+  NetUtil: "resource://gre/modules/NetUtil.sys.mjs",
+  SuperhumanReceipts: "chrome://messenger/content/superhumanReceipts.sys.mjs",
+});
+
 var superhuman = {
   PREF: "mail.superhuman.enabled",
+  RECEIPT_HEADER: "x-superhuman-receipt",
   get enabled() {
     return Services.prefs.getBoolPref(this.PREF, false);
   },
@@ -42,6 +49,7 @@ var superhuman = {
   reading: false,
   _gPending: null,
   _undo: null,
+  _linkIndex: -1,
 
   init() {
     if (!this.enabled) {
@@ -62,6 +70,21 @@ var superhuman = {
     threadTree.addEventListener("dblclick", this, true);
     threadTree.addEventListener("select", this);
     Services.obs.addObserver(this, "superhuman-refresh");
+    Services.obs.addObserver(this, "superhuman-receipts-updated");
+    window.addEventListener("unload", () => {
+      Services.obs.removeObserver(this, "superhuman-refresh");
+      Services.obs.removeObserver(this, "superhuman-receipts-updated");
+      clearInterval(this._receiptTimer);
+    });
+    try {
+      messageBrowser.contentWindow.addEventListener("MsgLoaded", event =>
+        this.onMessageLoaded(event.detail)
+      );
+      messageBrowser.contentWindow.addEventListener("keydown", this, true);
+    } catch (e) {
+      console.error(e);
+    }
+    this._receiptTimer = setInterval(() => this.refreshReceipts(), 60000);
   },
 
   /* ---------------------------------------------------------------- splits */
@@ -74,7 +97,7 @@ var superhuman = {
     const menu = document.createElement("button");
     menu.id = "superhumanMenuButton";
     menu.className = "superhuman-menu";
-    menu.title = "Folders";
+    menu.title = "Folders (←)";
     menu.setAttribute("aria-label", "Folders");
     menu.addEventListener("click", () => this.toggleFolders());
     bar.appendChild(menu);
@@ -118,9 +141,7 @@ var superhuman = {
   },
 
   _isInbox() {
-    return !!(
-      gFolder && gFolder.getFlag(Ci.nsMsgFolderFlags.Inbox)
-    );
+    return !!(gFolder && gFolder.getFlag(Ci.nsMsgFolderFlags.Inbox));
   },
 
   selectSplit(id, { focusList = true } = {}) {
@@ -141,15 +162,24 @@ var superhuman = {
     }
     this._reflectSplit();
     if (focusList) {
-      threadTree.table.body.focus();
-      if (gDBView?.rowCount && threadTree.selectedIndex < 0) {
-        threadTree.selectedIndex = 0;
-      }
+      this._focusList();
     }
   },
 
+  /** Show the whole inbox with no split filter (G then A). */
+  showAll() {
+    this.activeSplit = null;
+    quickFilterBar.filterer.setFilterValue("tags", null);
+    quickFilterBar.updateSearch();
+    this._reflectSplit();
+    this._focusList();
+  },
+
   cycleSplit(delta) {
-    const i = this.SPLITS.findIndex(s => s.id == this.activeSplit);
+    const i = Math.max(
+      0,
+      this.SPLITS.findIndex(s => s.id == this.activeSplit)
+    );
     const n = this.SPLITS.length;
     this.selectSplit(this.SPLITS[(i + delta + n) % n].id);
   },
@@ -160,10 +190,11 @@ var superhuman = {
       return;
     }
     this._splitBar.hidden = !this._isInbox();
-    if (this._isInbox()) {
+    if (this._isInbox() && this.activeSplit) {
       this.selectSplit(this.activeSplit, { focusList: false });
     }
     this.updateCounts();
+    setTimeout(() => this.refreshReceipts(), 300);
   },
 
   _reflectSplit() {
@@ -215,6 +246,23 @@ var superhuman = {
     day: "numeric",
     year: "numeric",
   }),
+  _fmtFull: new Intl.DateTimeFormat(undefined, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }),
+
+  _shortDate(d) {
+    const now = new Date();
+    if (d.toDateString() == now.toDateString()) {
+      return this._fmtTime.format(d);
+    }
+    return d.getFullYear() == now.getFullYear()
+      ? this._fmtDay.format(d)
+      : this._fmtYear.format(d);
+  },
 
   /**
    * Superhuman's list date: the time for today, "Nov 17" this year, and
@@ -227,20 +275,11 @@ var superhuman = {
     if (!this.enabled || !gDBView) {
       return null;
     }
-    let hdr;
     try {
-      hdr = gDBView.getMsgHdrAt(index);
+      return this._shortDate(new Date(gDBView.getMsgHdrAt(index).date / 1000));
     } catch {
       return null;
     }
-    const d = new Date(hdr.date / 1000);
-    const now = new Date();
-    if (d.toDateString() == now.toDateString()) {
-      return this._fmtTime.format(d);
-    }
-    return d.getFullYear() == now.getFullYear()
-      ? this._fmtDay.format(d)
-      : this._fmtYear.format(d);
   },
 
   /* --------------------------------------------------------------- preview */
@@ -292,13 +331,148 @@ var superhuman = {
     }, 50);
   },
 
+  /* -------------------------------------------------------- read receipts */
+
+  receiptIdOf(hdr) {
+    return hdr?.getStringProperty(this.RECEIPT_HEADER) || "";
+  },
+
+  /**
+   * Receipt state for a row: null when the message carries no receipt,
+   * otherwise { opens: Array|null } (null while not fetched yet).
+   */
+  receiptFor(index) {
+    if (!this.enabled || !gDBView) {
+      return null;
+    }
+    let hdr;
+    try {
+      hdr = gDBView.getMsgHdrAt(index);
+    } catch {
+      return null;
+    }
+    const id = this.receiptIdOf(hdr);
+    if (!id) {
+      return null;
+    }
+    return { id, opens: SuperhumanReceipts.opensFor(id) };
+  },
+
+  async refreshReceipts(force = false) {
+    if (!this.enabled || !gDBView || !SuperhumanReceipts.configured) {
+      return false;
+    }
+    const ids = [];
+    const n = Math.min(gDBView.rowCount, 600);
+    for (let i = 0; i < n; i++) {
+      try {
+        const id = this.receiptIdOf(gDBView.getMsgHdrAt(i));
+        if (id) {
+          ids.push(id);
+        }
+      } catch {}
+    }
+    const current = this._currentMessageHdr();
+    const cid = this.receiptIdOf(current);
+    if (cid) {
+      ids.push(cid);
+    }
+    return SuperhumanReceipts.refresh(ids, force);
+  },
+
+  _currentMessageHdr() {
+    try {
+      return messageBrowser.contentWindow.gMessage || null;
+    } catch {
+      return null;
+    }
+  },
+
+  _kindLabel(kind) {
+    return (
+      {
+        phone: "Phone",
+        desktop: "Computer",
+        gmail: "Gmail",
+        yahoo: "Yahoo Mail",
+        "apple-privacy": "Apple Mail (may be automatic)",
+      }[kind] || "Opened"
+    );
+  },
+
+  onMessageLoaded(hdr) {
+    const doc = messageBrowser.contentDocument;
+    let panel = doc.getElementById("superhumanSeen");
+    const id = this.receiptIdOf(hdr);
+    if (!this.enabled || !id) {
+      panel?.remove();
+      return;
+    }
+    if (!panel) {
+      panel = doc.createElement("div");
+      panel.id = "superhumanSeen";
+      panel.addEventListener("click", () => panel.classList.toggle("open"));
+      const header = doc.getElementById("messageHeader");
+      header.parentNode.insertBefore(panel, header.nextSibling);
+    }
+    panel.dataset.rid = id;
+    this._renderSeen(panel, SuperhumanReceipts.opensFor(id));
+    SuperhumanReceipts.refresh([id]);
+  },
+
+  _renderSeen(panel, opens) {
+    const doc = panel.ownerDocument;
+    panel.textContent = "";
+    const title = doc.createElement("div");
+    title.className = "seen-title";
+    if (opens == null) {
+      title.textContent = SuperhumanReceipts.configured
+        ? "Checking for opens…"
+        : "Read receipts are not set up";
+      panel.dataset.state = "pending";
+    } else if (!opens.length) {
+      title.textContent = "Not opened yet";
+      panel.dataset.state = "unopened";
+    } else {
+      title.textContent =
+        opens.length == 1 ? "Opened once" : `Opened ${opens.length} times`;
+      panel.dataset.state = "opened";
+    }
+    panel.appendChild(title);
+    if (opens?.length) {
+      const list = doc.createElement("ol");
+      list.className = "seen-list";
+      for (const open of [...opens].reverse()) {
+        const li = doc.createElement("li");
+        li.dataset.kind = open.kind || "";
+        const where = doc.createElement("span");
+        where.className = "seen-where";
+        const place = [open.city, open.country].filter(Boolean).join(", ");
+        where.textContent = place
+          ? `${this._kindLabel(open.kind)} · ${place}`
+          : this._kindLabel(open.kind);
+        const when = doc.createElement("span");
+        when.className = "seen-when";
+        when.textContent = this._fmtFull.format(new Date(open.t));
+        li.append(where, when);
+        list.appendChild(li);
+      }
+      panel.appendChild(list);
+    }
+  },
+
   /* --------------------------------------------------------------- reading */
 
   openReading() {
     if (!gDBView || threadTree.selectedIndex < 0) {
       return;
     }
+    if (gDBView.numSelected != 1) {
+      threadTree._selectSingle(threadTree.currentIndex);
+    }
+    this._picking = false;
     this.reading = true;
+    this._linkIndex = -1;
     document.body.classList.add("superhuman-reading");
     paneLayout.messagePaneSplitter.isCollapsed = false;
     document.getElementById("messagePane").focus();
@@ -307,7 +481,14 @@ var superhuman = {
   closeReading() {
     this.reading = false;
     document.body.classList.remove("superhuman-reading");
+    this._focusList();
+  },
+
+  _focusList() {
     threadTree.table.body.focus();
+    if (gDBView?.rowCount && threadTree.currentIndex < 0) {
+      threadTree.selectedIndex = 0;
+    }
   },
 
   toggleFolders() {
@@ -334,46 +515,179 @@ var superhuman = {
     }
   },
 
+  /** The displayed message's body document, when reading. */
+  _bodyDocument() {
+    try {
+      return messageBrowser.contentDocument.getElementById("messagepane")
+        .contentDocument;
+    } catch {
+      return null;
+    }
+  },
+
+  scrollMessage(direction) {
+    if (this.reading) {
+      const win = this._bodyDocument()?.defaultView;
+      win?.scrollByPages(direction);
+      return;
+    }
+    const rows = Math.max(1, Math.floor(threadTree.clientHeight / 44) - 1);
+    this.move(direction * rows);
+  },
+
+  jump(toEnd) {
+    if (this.reading) {
+      const win = this._bodyDocument()?.defaultView;
+      win?.scrollTo(0, toEnd ? win.document.body.scrollHeight : 0);
+      return;
+    }
+    const max = gDBView ? gDBView.rowCount - 1 : -1;
+    if (max < 0) {
+      return;
+    }
+    const index = toEnd ? max : 0;
+    threadTree.selectedIndex = index;
+    threadTree.scrollToIndex(index);
+  },
+
+  /** Tab in a conversation: focus the next link in the message body. */
+  cycleLinks(delta) {
+    const doc = this._bodyDocument();
+    const links = doc ? [...doc.querySelectorAll("a[href]")] : [];
+    if (!links.length) {
+      this.toast("No links in this message");
+      return;
+    }
+    const n = links.length;
+    this._linkIndex = (this._linkIndex + delta + n) % n;
+    const link = links[this._linkIndex];
+    link.focus();
+    link.scrollIntoView({ block: "nearest" });
+  },
+
+  openExternal(url) {
+    if (url.startsWith("mailto:")) {
+      MailServices.compose.OpenComposeWindowWithURI(
+        null,
+        Services.io.newURI(url)
+      );
+      return;
+    }
+    Cc["@mozilla.org/uriloader/external-protocol-service;1"]
+      .getService(Ci.nsIExternalProtocolService)
+      .loadURI(Services.io.newURI(url));
+  },
+
+  /** Cmd+O: open the links and attachments of the open message. */
+  openLinks() {
+    if (!this.reading) {
+      this.openReading();
+      return;
+    }
+    const doc = this._bodyDocument();
+    const urls = doc
+      ? [...doc.querySelectorAll("a[href]")]
+          .map(a => a.href)
+          .filter(href => /^(https?|mailto):/i.test(href))
+      : [];
+    const unique = [...new Set(urls)].slice(0, 5);
+    for (const url of unique) {
+      this.openExternal(url);
+    }
+    const attachments = messageBrowser.contentWindow.currentAttachments || [];
+    for (const attachment of attachments.slice(0, 5)) {
+      attachment.open?.(messageBrowser.contentWindow.browsingContext);
+    }
+    if (!unique.length && !attachments.length) {
+      this.toast("No links or attachments");
+    }
+  },
+
   /* -------------------------------------------------------------- actions */
 
   /** Every action: id, label, key hint, function. Used by keys + palette. */
   get actions() {
     const cmd = c => () => commandController.doCommand(c);
     return [
-      { id: "done", label: "Mark done (archive)", key: "E", run: () => this.done() },
-      { id: "trash", label: "Trash", key: "#", run: () => this.trash() },
-      { id: "spam", label: "Mark as spam", key: "!", run: cmd("cmd_markAsJunk") },
+      { id: "done", label: "Mark Done", key: "E", run: () => this.done() },
+      { id: "notdone", label: "Mark Not Done (back to Inbox)", key: "⇧E", run: () => this.notDone() },
+      { id: "remind", label: "Remind Me (stars it)", key: "H", run: () => this.remind() },
       { id: "star", label: "Star / unstar", key: "S", run: cmd("cmd_markAsFlagged") },
       { id: "unread", label: "Mark read / unread", key: "U", run: () => this.toggleRead() },
-      { id: "reply", label: "Reply", key: "R", run: cmd("cmd_replySender") },
-      { id: "replyall", label: "Reply all", key: "⇧R", run: cmd("cmd_replyall") },
-      { id: "forward", label: "Forward", key: "F", run: cmd("cmd_forwardInline") },
+      { id: "trash", label: "Trash", key: "#", run: () => this.trash() },
+      { id: "spam", label: "Mark spam", key: "!", run: () => this.spam() },
+      { id: "mute", label: "Mute conversation", key: "⇧M", run: () => this.mute() },
+      { id: "unsubscribe", label: "Unsubscribe", key: "⌘U", run: () => this.unsubscribe() },
       { id: "compose", label: "Compose", key: "C", run: cmd("cmd_newMessage") },
-      { id: "remind", label: "Remind me (mark for follow-up)", key: "H", run: () => this.remind() },
+      { id: "reply", label: "Reply", key: "R", run: cmd("cmd_replySender") },
+      { id: "replyall", label: "Reply all", key: "↩ (in a message)", run: cmd("cmd_replyall") },
+      { id: "forward", label: "Forward", key: "F", run: cmd("cmd_forwardInline") },
       { id: "label", label: "Add label", key: "L", run: () => this.openPalette("label:") },
+      { id: "removelabel", label: "Remove this split's label", key: "Y", run: () => this.removeSplitLabel(0) },
+      { id: "removelabelnext", label: "Remove label, then next", key: "[", run: () => this.removeSplitLabel(1) },
+      { id: "removelabelprev", label: "Remove label, then previous", key: "]", run: () => this.removeSplitLabel(-1) },
       { id: "removelabels", label: "Remove all labels", key: "⇧Y", run: cmd("cmd_removeTags") },
+      { id: "move", label: "Move to folder", key: "V", run: () => this.openPalette("move:") },
       { id: "undo", label: "Undo", key: "Z", run: () => this.undo() },
+      { id: "select", label: "Select conversation", key: "X", run: () => this.toggleSelect() },
+      { id: "selectdown", label: "Add to selection (down)", key: "⇧J", run: () => this.extendSelection(1) },
+      { id: "selectup", label: "Add to selection (up)", key: "⇧K", run: () => this.extendSelection(-1) },
+      { id: "selectfromhere", label: "Select all from here", key: "⌘A", run: () => this.selectFromHere() },
+      { id: "selectall", label: "Select all", key: "⌘⇧A", run: () => threadTree.selectAll() },
       { id: "next", label: "Next conversation", key: "J", run: () => this.move(1) },
       { id: "prev", label: "Previous conversation", key: "K", run: () => this.move(-1) },
+      { id: "nextmsg", label: "Next message", key: "N", run: cmd("cmd_nextMsg") },
+      { id: "prevmsg", label: "Previous message", key: "P", run: cmd("cmd_previousMsg") },
       { id: "open", label: "Open conversation", key: "↩", run: () => this.openReading() },
       { id: "back", label: "Back to list", key: "Esc", run: () => this.closeReading() },
+      { id: "expand", label: "Expand / collapse conversation", key: "O", run: () => this.toggleThread() },
+      { id: "expandall", label: "Expand all conversations", key: "⇧O", run: cmd("cmd_expandAllThreads") },
+      { id: "openlinks", label: "Open links and attachments", key: "⌘O", run: () => this.openLinks() },
+      { id: "cyclelinks", label: "Cycle through links (in a message)", key: "Tab", run: () => this.cycleLinks(1) },
+      { id: "scrolldown", label: "Scroll down", key: "Space", run: () => this.scrollMessage(1) },
+      { id: "scrollup", label: "Scroll up", key: "⇧Space", run: () => this.scrollMessage(-1) },
+      { id: "top", label: "Jump to top", key: "⌘↑", run: () => this.jump(false) },
+      { id: "bottom", label: "Jump to bottom", key: "⌘↓", run: () => this.jump(true) },
       { id: "search", label: "Search", key: "/", run: () => this.focusSearch() },
+      { id: "shortcuts", label: "Keyboard shortcuts", key: "?", run: () => this.openPalette() },
+      { id: "filterunread", label: "Show unread only", key: "⇧U", run: () => this.toggleFilter("unread") },
+      { id: "filterstarred", label: "Show starred only", key: "⇧S", run: () => this.toggleFilter("starred") },
+      { id: "filterimportant", label: "Show important only", key: "⇧I", run: () => this.selectSplit("important") },
+      { id: "filternoreply", label: "Show waiting on a reply", key: "⇧R", run: () => this.toggleNoReply() },
       { id: "nextsplit", label: "Next split", key: "Tab", run: () => this.cycleSplit(1) },
       { id: "prevsplit", label: "Previous split", key: "⇧Tab", run: () => this.cycleSplit(-1) },
-      { id: "folders", label: "Show / hide folders", key: "⌘⇧F", run: () => this.toggleFolders() },
-      { id: "selectall", label: "Select all", key: "⌘A", run: cmd("cmd_selectAll") },
-      { id: "goinbox", label: "Go to Inbox", key: "G I", run: () => this.go("Inbox") },
+      { id: "folders", label: "Show / hide folders", key: "←", run: () => this.toggleFolders() },
+      { id: "newwindow", label: "New window", key: "⌘N", run: () => this.newWindow() },
+      { id: "bigger", label: "Bigger text", key: "⌘=", run: cmd("cmd_fullZoomEnlarge") },
+      { id: "smaller", label: "Smaller text", key: "⌘-", run: cmd("cmd_fullZoomReduce") },
+      { id: "resettext", label: "Reset text size", key: "⌘0", run: cmd("cmd_fullZoomReset") },
+      { id: "copylink", label: "Copy message link", key: "⌃/", run: () => this.copyLink() },
+      { id: "settings", label: "Settings", key: "⌘,", run: () => top.openPreferencesTab() },
+      { id: "receipts", label: "Refresh read receipts", key: "", run: () => this.refreshReceipts(true) },
+      { id: "goimportant", label: "Go to Important", key: "G I", run: () => this.goSplit("important") },
+      { id: "goother", label: "Go to Other", key: "G O", run: () => this.goSplit("other") },
       { id: "gostarred", label: "Go to Starred", key: "G S", run: () => this.goStarred() },
       { id: "godrafts", label: "Go to Drafts", key: "G D", run: () => this.go("Drafts") },
       { id: "gosent", label: "Go to Sent", key: "G T", run: () => this.go("SentMail") },
-      { id: "godone", label: "Go to Done (Archive)", key: "G E", run: () => this.go("Archive") },
+      { id: "godone", label: "Go to Done", key: "G E", run: () => this.go("Archive") },
+      { id: "goreminders", label: "Go to Reminders (starred)", key: "G H", run: () => this.goStarred() },
+      { id: "gomuted", label: "Go to Muted", key: "G M", run: () => this.goMuted() },
+      { id: "gosnippets", label: "Go to Snippets (templates)", key: "G ;", run: () => this.go("Templates") },
       { id: "gospam", label: "Go to Spam", key: "G !", run: () => this.go("Junk") },
       { id: "gotrash", label: "Go to Trash", key: "G #", run: () => this.go("Trash") },
-      ...this.SPLITS.map((s, i) => ({
+      { id: "goall", label: "Go to All Mail", key: "G A", run: () => this.goAll() },
+      { id: "golabel", label: "Go to label", key: "G L", run: () => this.openPalette("golabel:") },
+      ...this.SPLITS.map(s => ({
         id: "split-" + s.id,
         label: "Split: " + s.label,
-        key: i < 9 ? `⌃${i + 1}` : "",
+        key: "",
         run: () => this.selectSplit(s.id),
+      })),
+      ...this._accounts().map((account, i) => ({
+        id: "account-" + i,
+        label: "Switch to " + account.incomingServer.prettyName,
+        key: i < 9 ? `⌃${i + 1}` : "",
+        run: () => this.switchAccount(i),
       })),
     ];
   },
@@ -382,22 +696,51 @@ var superhuman = {
     return gDBView ? gDBView.getSelectedMsgHdrs() : [];
   },
 
+  _remember(message) {
+    this._undo = { message };
+    this.toast(message, true);
+  },
+
   done() {
-    const hdrs = this._selectedHdrs();
-    if (!hdrs.length) {
+    if (!this._selectedHdrs().length) {
       return;
     }
-    this._remember(hdrs, "Marked done");
+    this._remember("Marked done");
     commandController.doCommand("cmd_archive");
   },
 
-  trash() {
+  notDone() {
     const hdrs = this._selectedHdrs();
-    if (!hdrs.length) {
+    const inbox = this._folderFor("Inbox", hdrs[0]?.folder.server);
+    if (!hdrs.length || !inbox || gFolder == inbox) {
       return;
     }
-    this._remember(hdrs, "Moved to Trash");
+    this._remember("Moved to Inbox");
+    commandController.doCommand("cmd_moveMessage", inbox);
+  },
+
+  trash() {
+    if (!this._selectedHdrs().length) {
+      return;
+    }
+    this._remember("Moved to Trash");
     commandController.doCommand("cmd_delete");
+  },
+
+  spam() {
+    if (!this._selectedHdrs().length) {
+      return;
+    }
+    this._remember("Marked as spam");
+    commandController.doCommand("cmd_markAsJunk");
+  },
+
+  mute() {
+    if (!this._selectedHdrs().length) {
+      return;
+    }
+    this._remember("Muted");
+    commandController.doCommand("cmd_killThread");
   },
 
   toggleRead() {
@@ -416,9 +759,26 @@ var superhuman = {
     this.toast("Starred to follow up");
   },
 
-  _remember(hdrs, message) {
-    this._undo = { message };
-    this.toast(message, true);
+  removeSplitLabel(then) {
+    const split = this.SPLITS.find(s => s.id == this.activeSplit);
+    const hdrs = this._selectedHdrs();
+    if (!split?.tags || !hdrs.length) {
+      this.toast("No split label to remove here");
+      return;
+    }
+    const index = threadTree.currentIndex;
+    for (const key of Object.keys(split.tags)) {
+      hdrs[0].folder.removeKeywordsFromMessages(hdrs, key);
+    }
+    this.toast(`Removed ${split.label}`);
+    setTimeout(() => {
+      const max = gDBView.rowCount - 1;
+      if (max < 0) {
+        return;
+      }
+      const next = Math.max(0, Math.min(max, index + (then < 0 ? -1 : 0)));
+      threadTree.selectedIndex = next;
+    }, 50);
   },
 
   undo() {
@@ -441,11 +801,142 @@ var superhuman = {
     }
     const cur = threadTree.currentIndex < 0 ? -1 : threadTree.currentIndex;
     const next = Math.max(0, Math.min(max, cur + delta));
+    if (this._picking) {
+      // Selecting with X: J/K move the cursor and keep the picked rows.
+      threadTree.currentIndex = next;
+      return;
+    }
     threadTree.selectedIndex = next;
     threadTree.scrollToIndex(next);
   },
 
-  go(kind) {
+  /** X: tick the conversation under the cursor (Superhuman multi-select). */
+  toggleSelect() {
+    const index = threadTree.currentIndex;
+    if (index < 0) {
+      return;
+    }
+    if (!this._picking) {
+      this._picking = true;
+      threadTree.toggleSelectionAtIndex(index, true);
+      return;
+    }
+    threadTree.toggleSelectionAtIndex(index);
+  },
+
+  extendSelection(delta) {
+    this._picking = true;
+    const max = gDBView ? gDBView.rowCount - 1 : -1;
+    const cur = threadTree.currentIndex;
+    const next = cur + delta;
+    if (cur < 0 || next < 0 || next > max) {
+      return;
+    }
+    threadTree.toggleSelectionAtIndex(cur, true, true);
+    threadTree.toggleSelectionAtIndex(next, true);
+    threadTree.currentIndex = next;
+    threadTree.scrollToIndex(next);
+  },
+
+  selectFromHere() {
+    const max = gDBView ? gDBView.rowCount - 1 : -1;
+    const cur = Math.max(0, threadTree.currentIndex);
+    if (max >= 0) {
+      threadTree._selectRange(cur, max);
+    }
+  },
+
+  clearSelection() {
+    const wasPicking = this._picking;
+    this._picking = false;
+    if (gDBView?.numSelected > 1 || (wasPicking && gDBView?.numSelected != 1)) {
+      threadTree._selectSingle(Math.max(0, threadTree.currentIndex));
+      return true;
+    }
+    return false;
+  },
+
+  toggleThread() {
+    const index = threadTree.currentIndex;
+    if (index < 0 || !gDBView) {
+      return;
+    }
+    if (gDBView.isContainer(index)) {
+      gDBView.toggleOpenState(index);
+    } else {
+      this.toast("Single message, nothing to expand");
+    }
+  },
+
+  toggleFilter(name) {
+    const on = !quickFilterBar.filterer.getFilterValue(name);
+    quickFilterBar.filterer.setFilterValue(name, on || null);
+    quickFilterBar.updateSearch();
+    this.toast(on ? `Showing ${name} only` : `Showing all`);
+  },
+
+  /** Superhuman's "waiting on a reply": hide mail already replied to. */
+  toggleNoReply() {
+    this._defineNoReplyFilter();
+    const on = !quickFilterBar.filterer.getFilterValue("superhumanNoReply");
+    quickFilterBar.filterer.setFilterValue("superhumanNoReply", on || null);
+    quickFilterBar.updateSearch();
+    this.toast(on ? "Showing mail you haven't replied to" : "Showing all");
+  },
+
+  _defineNoReplyFilter() {
+    const { QuickFilterManager } = ChromeUtils.importESModule(
+      "resource:///modules/QuickFilterManager.sys.mjs"
+    );
+    if (QuickFilterManager.filterDefsByName.superhumanNoReply) {
+      return;
+    }
+    QuickFilterManager.defineFilter({
+      name: "superhumanNoReply",
+      domId: "superhumanNoReply",
+      appendTerms(termCreator, terms, value) {
+        if (!value) {
+          return;
+        }
+        const term = termCreator.createTerm();
+        term.attrib = Ci.nsMsgSearchAttrib.MsgStatus;
+        const v = term.value;
+        v.attrib = term.attrib;
+        v.status = Ci.nsMsgMessageFlags.Replied;
+        term.value = v;
+        term.op = Ci.nsMsgSearchOp.Isnt;
+        term.booleanAnd = true;
+        terms.push(term);
+      },
+    });
+  },
+
+  _accounts() {
+    try {
+      return MailServices.accounts.accounts.filter(a => a.incomingServer);
+    } catch {
+      return [];
+    }
+  },
+
+  switchAccount(index) {
+    const account = this._accounts()[index];
+    if (!account) {
+      return;
+    }
+    const root = account.incomingServer.rootFolder;
+    const inbox =
+      root.getFolderWithFlags(Ci.nsMsgFolderFlags.Inbox) ??
+      root.getChildNamed("Inbox");
+    if (this.reading) {
+      this.closeReading();
+    }
+    displayFolder((inbox ?? root).URI);
+    this.toast(account.incomingServer.prettyName);
+    this._focusList();
+  },
+
+  _folderFor(kind, server) {
     const flags = {
       Inbox: Ci.nsMsgFolderFlags.Inbox,
       Drafts: Ci.nsMsgFolderFlags.Drafts,
@@ -453,36 +944,126 @@ var superhuman = {
       Archive: Ci.nsMsgFolderFlags.Archive,
       Junk: Ci.nsMsgFolderFlags.Junk,
       Trash: Ci.nsMsgFolderFlags.Trash,
+      Templates: Ci.nsMsgFolderFlags.Templates,
     };
-    const server = gFolder?.server;
-    let folder =
+    server = server ?? gFolder?.server;
+    return (
       server?.rootFolder.getFolderWithFlags(flags[kind]) ??
-      MailServices.accounts.localFoldersServer.rootFolder.getFolderWithFlags(
+      MailServices.accounts.localFoldersServer?.rootFolder.getFolderWithFlags(
         flags[kind]
-      );
+      ) ??
+      MailServices.accounts.allFolders.find(f => f.getFlag(flags[kind])) ??
+      null
+    );
+  },
+
+  go(kind) {
+    const folder = this._folderFor(kind);
     if (!folder) {
-      folder = MailServices.accounts.allFolders.find(f =>
-        f.getFlag(flags[kind])
-      );
-    }
-    if (folder) {
-      if (this.reading) {
-        this.closeReading();
-      }
-      displayFolder(folder.URI);
-      threadTree.table.body.focus();
-    } else {
       this.toast(`No ${kind} folder`);
+      return false;
     }
+    if (this.reading) {
+      this.closeReading();
+    }
+    displayFolder(folder.URI);
+    this._focusList();
+    return true;
+  },
+
+  goSplit(id) {
+    if (!this._isInbox()) {
+      this.go("Inbox");
+    }
+    this.selectSplit(id);
+  },
+
+  goAll() {
+    if (!this._isInbox()) {
+      this.go("Inbox");
+    }
+    this.showAll();
+    this.toast("All mail");
   },
 
   goStarred() {
     if (!this._isInbox()) {
       this.go("Inbox");
     }
+    this.showAll();
     quickFilterBar.filterer.setFilterValue("starred", true);
     quickFilterBar.updateSearch();
     this.toast("Showing starred");
+  },
+
+  goMuted() {
+    if (!this._isInbox()) {
+      this.go("Inbox");
+    }
+    this.showAll();
+    if (!gViewWrapper.showIgnored) {
+      gViewWrapper.showIgnored = true;
+    }
+    this.toast("Showing muted conversations");
+  },
+
+  newWindow() {
+    top.MsgOpenNewWindowForFolder(gFolder?.URI, -1);
+  },
+
+  copyLink() {
+    const hdr = this._selectedHdrs()[0];
+    if (!hdr) {
+      return;
+    }
+    const link = "mid:" + hdr.messageId;
+    Cc["@mozilla.org/widget/clipboardhelper;1"]
+      .getService(Ci.nsIClipboardHelper)
+      .copyString(link);
+    this._lastCopied = link;
+    this.toast("Link copied");
+  },
+
+  async unsubscribe() {
+    const hdr = this._selectedHdrs()[0];
+    if (!hdr) {
+      return;
+    }
+    const uri = hdr.folder.getUriForMsg(hdr);
+    const service = MailServices.messageServiceFromURI(uri);
+    const text = await new Promise(resolve => {
+      const chunks = [];
+      service.streamHeaders(
+        uri,
+        {
+          onStartRequest() {},
+          onDataAvailable(request, stream, offset, count) {
+            chunks.push(NetUtil.readInputStreamToString(stream, count));
+          },
+          onStopRequest() {
+            resolve(chunks.join(""));
+          },
+          QueryInterface: ChromeUtils.generateQI(["nsIStreamListener"]),
+        },
+        null,
+        true
+      );
+    });
+    const match = /^list-unsubscribe:[ \t]*((?:.*)(?:\r?\n[ \t].*)*)/im.exec(text);
+    const links = match
+      ? [...match[1].matchAll(/<([^>]+)>/g)].map(m => m[1].trim())
+      : [];
+    const target =
+      links.find(l => /^https:/i.test(l)) ??
+      links.find(l => /^mailto:/i.test(l)) ??
+      links.find(l => /^http:/i.test(l));
+    if (!target) {
+      this.toast("No unsubscribe link in this email");
+      return;
+    }
+    this.openExternal(target);
+    this._remember("Unsubscribed and archived");
+    commandController.doCommand("cmd_archive");
   },
 
   /* ---------------------------------------------------------------- toast */
@@ -498,6 +1079,10 @@ var superhuman = {
 
   toast(message, undoable = false) {
     const t = this._toast;
+    if (!t) {
+      return;
+    }
+    this.lastToast = message;
     t.textContent = "";
     const msg = document.createElement("span");
     msg.textContent = message;
@@ -553,10 +1138,22 @@ var superhuman = {
     this._paletteInput.addEventListener("keydown", e => this._paletteKey(e));
   },
 
+  _folderItems(q, run) {
+    return MailServices.accounts.allFolders
+      .filter(f => !f.isServer && !f.getFlag(Ci.nsMsgFolderFlags.Virtual))
+      .filter(f => !q || f.prettyName.toLowerCase().includes(q))
+      .slice(0, 40)
+      .map(f => ({
+        id: "folder-" + f.URI,
+        label: `${f.prettyName} · ${f.server.prettyName}`,
+        key: "",
+        run: () => run(f),
+      }));
+  },
+
   _paletteItems(query) {
-    if (query.startsWith("label:")) {
-      const q = query.slice(6).trim().toLowerCase();
-      return MailServices.tags
+    const tagItems = (q, run) =>
+      MailServices.tags
         .getAllTags()
         .filter(t => !q || t.tag.toLowerCase().includes(q))
         .map(t => ({
@@ -564,15 +1161,41 @@ var superhuman = {
           label: "Label: " + t.tag,
           key: "",
           color: t.color,
-          run: () => {
-            const event = { target: { value: t.key } };
-            commandController.doCommand("cmd_toggleTag", event);
-            this.toast(`Labeled ${t.tag}`);
-          },
+          run: () => run(t),
         }));
+    if (query.startsWith("label:")) {
+      return tagItems(query.slice(6).trim().toLowerCase(), t => {
+        commandController.doCommand("cmd_toggleTag", {
+          target: { value: t.key },
+        });
+        this.toast(`Labeled ${t.tag}`);
+      });
+    }
+    if (query.startsWith("golabel:")) {
+      return tagItems(query.slice(8).trim().toLowerCase(), t => {
+        if (!this._isInbox()) {
+          this.go("Inbox");
+        }
+        this.activeSplit = null;
+        quickFilterBar.filterer.setFilterValue("tags", {
+          mode: "OR",
+          tags: { [t.key]: true },
+        });
+        quickFilterBar.updateSearch();
+        this._reflectSplit();
+        this.toast(t.tag);
+      });
+    }
+    if (query.startsWith("move:")) {
+      return this._folderItems(query.slice(5).trim().toLowerCase(), f => {
+        this._remember(`Moved to ${f.prettyName}`);
+        commandController.doCommand("cmd_moveMessage", f);
+      });
     }
     const q = query.trim().toLowerCase();
-    const items = this.actions.filter(a => !q || a.label.toLowerCase().includes(q));
+    const items = this.actions.filter(
+      a => !q || a.label.toLowerCase().includes(q)
+    );
     if (q.length > 1) {
       items.push({
         id: "search-text",
@@ -599,6 +1222,7 @@ var superhuman = {
       const li = document.createElement("li");
       li.setAttribute("role", "option");
       li.dataset.index = i;
+      li.dataset.action = item.id;
       const label = document.createElement("span");
       label.className = "palette-label";
       label.textContent = item.label;
@@ -661,10 +1285,11 @@ var superhuman = {
   closePalette() {
     this._palette.classList.remove("open");
     this._palette.hidden = true;
-    (this.reading
-      ? document.getElementById("messagePane")
-      : threadTree.table.body
-    ).focus();
+    if (this.reading) {
+      document.getElementById("messagePane").focus();
+    } else {
+      threadTree.table.body.focus();
+    }
   },
 
   get paletteOpen() {
@@ -686,7 +1311,8 @@ var superhuman = {
       (name == "input" && !["checkbox", "radio", "button"].includes(t.type)) ||
       name == "textarea" ||
       name == "select" ||
-      name == "search-bar"
+      name == "search-bar" ||
+      name == "global-search-bar"
     );
   },
 
@@ -708,34 +1334,83 @@ var superhuman = {
     }
   },
 
-  observe(subject, topic) {
+  observe(subject, topic, data) {
     if (topic == "superhuman-refresh") {
       this.updateCounts();
+    } else if (topic == "superhuman-receipts-updated") {
+      threadTree.invalidate();
+      const panel = messageBrowser.contentDocument?.getElementById(
+        "superhumanSeen"
+      );
+      if (panel && data.split(",").includes(panel.dataset.rid)) {
+        this._renderSeen(panel, SuperhumanReceipts.opensFor(panel.dataset.rid));
+      }
     }
   },
 
   /** Returns true when the key was handled. */
   handleKey(event) {
-    const accel = event.metaKey || event.ctrlKey;
-    if (accel && !event.altKey && event.key.toLowerCase() == "k") {
+    const key = event.key;
+    // Pressing a modifier on its own (e.g. Shift for "G then #") must not
+    // cancel a pending two-key sequence.
+    if (["Shift", "Control", "Alt", "Meta", "CapsLock", "Fn"].includes(key)) {
+      return false;
+    }
+    const lower = key.length == 1 ? key.toLowerCase() : key;
+    const { metaKey, ctrlKey, altKey, shiftKey } = event;
+
+    if ((metaKey || ctrlKey) && !altKey && lower == "k" && !shiftKey) {
       this.paletteOpen ? this.closePalette() : this.openPalette();
       return true;
     }
-    if (accel && event.shiftKey && event.key.toLowerCase() == "f") {
-      this.toggleFolders();
-      return true;
-    }
-    if (event.ctrlKey && !event.metaKey && /^[1-9]$/.test(event.key)) {
-      const split = this.SPLITS[Number(event.key) - 1];
-      if (split) {
-        this.selectSplit(split.id);
-        return true;
-      }
-    }
-    if (this.paletteOpen || this._typing(event)) {
+    if (this.paletteOpen || this._typing(event) || altKey) {
       return false;
     }
-    if (event.metaKey || event.ctrlKey || event.altKey) {
+
+    // Control: account switching and copy link.
+    if (ctrlKey && !metaKey) {
+      if (/^[1-9]$/.test(key)) {
+        this.switchAccount(Number(key) - 1);
+        return true;
+      }
+      if (key == "/") {
+        this.copyLink();
+        return true;
+      }
+      return false;
+    }
+
+    // Command combinations.
+    if (metaKey) {
+      if (shiftKey) {
+        if (lower == "a") {
+          threadTree.selectAll();
+          return true;
+        }
+        if (lower == "f") {
+          this.toggleFolders();
+          return true;
+        }
+        return false;
+      }
+      const map = {
+        a: () => this.selectFromHere(),
+        u: () => this.unsubscribe(),
+        o: () => this.openLinks(),
+        n: () => this.newWindow(),
+        ",": () => top.openPreferencesTab(),
+        ArrowUp: () => this.jump(false),
+        ArrowDown: () => this.jump(true),
+        "=": () => commandController.doCommand("cmd_fullZoomEnlarge"),
+        "+": () => commandController.doCommand("cmd_fullZoomEnlarge"),
+        "-": () => commandController.doCommand("cmd_fullZoomReduce"),
+        0: () => commandController.doCommand("cmd_fullZoomReset"),
+      };
+      const fn = map[lower] ?? map[key];
+      if (fn) {
+        fn();
+        return true;
+      }
       return false;
     }
 
@@ -744,44 +1419,100 @@ var superhuman = {
       clearTimeout(this._gPending);
       this._gPending = null;
       const map = {
-        i: () => this.go("Inbox"),
+        i: () => this.goSplit("important"),
+        o: () => this.goSplit("other"),
         s: () => this.goStarred(),
         d: () => this.go("Drafts"),
         t: () => this.go("SentMail"),
         e: () => this.go("Archive"),
+        h: () => this.goStarred(),
+        m: () => this.goMuted(),
+        ";": () => this.go("Templates"),
         "!": () => this.go("Junk"),
+        1: () => this.go("Junk"),
         "#": () => this.go("Trash"),
+        3: () => this.go("Trash"),
+        a: () => this.goAll(),
+        l: () => this.openPalette("golabel:"),
       };
-      const fn = map[event.key.toLowerCase()] ?? map[event.key];
+      const fn = map[lower] ?? map[key];
       if (fn) {
         fn();
         return true;
       }
     }
 
-    switch (event.key) {
+    if (shiftKey) {
+      const map = {
+        J: () => this.extendSelection(1),
+        K: () => this.extendSelection(-1),
+        ArrowDown: () => this.extendSelection(1),
+        ArrowUp: () => this.extendSelection(-1),
+        E: () => this.notDone(),
+        M: () => this.mute(),
+        O: () => commandController.doCommand("cmd_expandAllThreads"),
+        Y: () => commandController.doCommand("cmd_removeTags"),
+        U: () => this.toggleFilter("unread"),
+        S: () => this.toggleFilter("starred"),
+        I: () => this.selectSplit("important"),
+        R: () => this.toggleNoReply(),
+        " ": () => this.scrollMessage(-1),
+        "#": () => this.trash(),
+        "!": () => this.spam(),
+        "?": () => this.openPalette(),
+        Tab: () => (this.reading ? this.cycleLinks(-1) : this.cycleSplit(-1)),
+      };
+      const fn = map[key];
+      if (fn) {
+        fn();
+        return true;
+      }
+      return false;
+    }
+
+    switch (key) {
       case "g":
-        this._gPending = setTimeout(() => (this._gPending = null), 1200);
+        this._gPending = setTimeout(() => (this._gPending = null), 1500);
         return true;
       case "j":
+      case "ArrowDown":
         this.move(1);
         return true;
       case "k":
+      case "ArrowUp":
         this.move(-1);
+        return true;
+      case "n":
+        commandController.doCommand("cmd_nextMsg");
+        return true;
+      case "p":
+        commandController.doCommand("cmd_previousMsg");
         return true;
       case "Enter":
         if (!this.reading) {
           this.openReading();
-          return true;
+        } else {
+          commandController.doCommand("cmd_replyall");
         }
-        commandController.doCommand("cmd_replyall");
         return true;
       case "Escape":
+        if (this.clearSelection()) {
+          return true;
+        }
         if (this.reading) {
           this.closeReading();
           return true;
         }
         return false;
+      case "ArrowLeft":
+        if (this.reading) {
+          return false;
+        }
+        this.toggleFolders();
+        return true;
+      case " ":
+        this.scrollMessage(1);
+        return true;
       case "e":
         this.done();
         return true;
@@ -789,7 +1520,7 @@ var superhuman = {
         this.trash();
         return true;
       case "!":
-        commandController.doCommand("cmd_markAsJunk");
+        this.spam();
         return true;
       case "s":
         commandController.doCommand("cmd_markAsFlagged");
@@ -799,9 +1530,6 @@ var superhuman = {
         return true;
       case "r":
         commandController.doCommand("cmd_replySender");
-        return true;
-      case "R":
-        commandController.doCommand("cmd_replyall");
         return true;
       case "f":
         commandController.doCommand("cmd_forwardInline");
@@ -815,8 +1543,23 @@ var superhuman = {
       case "l":
         this.openPalette("label:");
         return true;
-      case "Y":
-        commandController.doCommand("cmd_removeTags");
+      case "y":
+        this.removeSplitLabel(0);
+        return true;
+      case "[":
+        this.removeSplitLabel(1);
+        return true;
+      case "]":
+        this.removeSplitLabel(-1);
+        return true;
+      case "v":
+        this.openPalette("move:");
+        return true;
+      case "x":
+        this.toggleSelect();
+        return true;
+      case "o":
+        this.toggleThread();
         return true;
       case "z":
         this.undo();
@@ -824,12 +1567,16 @@ var superhuman = {
       case "/":
         this.focusSearch();
         return true;
+      case "?":
+        this.openPalette();
+        return true;
       case "Tab":
-        if (!this.reading) {
-          this.cycleSplit(event.shiftKey ? -1 : 1);
-          return true;
+        if (this.reading) {
+          this.cycleLinks(1);
+        } else {
+          this.cycleSplit(1);
         }
-        return false;
+        return true;
     }
     return false;
   },

@@ -164,6 +164,59 @@
     }
   }
 
+  /* Read receipts: "Opened N times" card under the header (click to expand) */
+  #superhumanSeen {
+    box-sizing: border-box;
+    inline-size: min(calc(100% - 64px), var(--sh-col));
+    margin: 0 auto 12px;
+    padding: 10px 14px;
+    border-radius: 12px;
+    background: var(--sh-glass);
+    box-shadow: inset 0 0 0 0.5px var(--sh-hair), inset 0 1px 0 var(--sh-glass-edge);
+    font-family: var(--sh-font);
+    cursor: default;
+
+    & .seen-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--sh-ink-2);
+    }
+
+    &[data-state="opened"] .seen-title {
+      background: linear-gradient(90deg, #65abff, #b4a2f6);
+      background-clip: text;
+      color: transparent;
+    }
+
+    & .seen-list {
+      display: none;
+      list-style: none;
+      margin: 8px 0 0;
+      padding: 0;
+    }
+
+    &.open .seen-list {
+      display: grid;
+      gap: 4px;
+    }
+
+    & li {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      font-size: 12.5px;
+    }
+
+    & .seen-where {
+      color: var(--sh-ink);
+    }
+
+    & .seen-when {
+      color: var(--sh-ink-3);
+      font-variant-numeric: tabular-nums;
+    }
+  }
+
   #messagepane,
   #messagepanebox {
     background: var(--sh-surface) !important;
